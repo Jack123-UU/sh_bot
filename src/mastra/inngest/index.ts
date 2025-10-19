@@ -123,11 +123,24 @@ export function inngestServe({
   }
   let serveHost: string | undefined = undefined;
   if (process.env.NODE_ENV === "production") {
-    if (process.env.REPLIT_DOMAINS) {
+    // Check Render environment first
+    if (process.env.RENDER_EXTERNAL_URL) {
+      serveHost = process.env.RENDER_EXTERNAL_URL;
+    } 
+    // Then check Replit environment for backward compatibility
+    else if (process.env.REPLIT_DOMAINS) {
       serveHost = `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
     }
+    // Fallback to RENDER_EXTERNAL_HOSTNAME
+    else if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+      serveHost = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+    }
+    // Log warning if no external URL is configured
+    else {
+      console.warn('[Inngest] Warning: No external URL configured in production. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable.');
+    }
   } else {
-    // 开发环境使用动态内部地址，避免固定 5000 端口
+    // Development environment uses dynamic internal address
     serveHost = baseInternalUrl;
   }
   return originalInngestServe({
