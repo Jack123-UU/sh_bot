@@ -6,7 +6,10 @@ export const alertAdminTool = createTool({
   description: `Send alert message to admin. Use this when system encounters critical errors or unusual situations that require admin attention.`,
   inputSchema: z.object({
     message: z.string().describe("Alert message to send to admin"),
-    severity: z.enum(["warning", "error", "critical"]).default("warning").describe("Alert severity level"),
+    severity: z
+      .enum(["warning", "error", "critical"])
+      .default("warning")
+      .describe("Alert severity level"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -16,10 +19,10 @@ export const alertAdminTool = createTool({
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
     const { message, severity } = context;
-    
+
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const adminId = process.env.ADMIN_ID;
-    
+
     if (!adminId) {
       logger?.error("❌ [AlertAdminTool] ADMIN_ID not configured");
       return {
@@ -50,7 +53,7 @@ export const alertAdminTool = createTool({
       }[severity];
 
       const fullMessage = `${emoji} **系统告警**\n\n${message}`;
-      
+
       const response = await fetch(
         `https://api.telegram.org/bot${botToken}/sendMessage`,
         {
@@ -61,7 +64,7 @@ export const alertAdminTool = createTool({
             text: fullMessage,
             parse_mode: "Markdown",
           }),
-        }
+        },
       );
 
       const result = await response.json();

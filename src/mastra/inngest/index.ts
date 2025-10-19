@@ -126,7 +126,7 @@ export function inngestServe({
     // Check Render environment first
     if (process.env.RENDER_EXTERNAL_URL) {
       serveHost = process.env.RENDER_EXTERNAL_URL;
-    } 
+    }
     // Then check Replit environment for backward compatibility
     else if (process.env.REPLIT_DOMAINS) {
       serveHost = `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
@@ -138,7 +138,7 @@ export function inngestServe({
     // Log warning if no external URL is configured
     else {
       console.warn(
-        "⚠️ [Inngest] No external URL configured. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable."
+        "⚠️ [Inngest] No external URL configured. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable.",
       );
     }
   } else {
