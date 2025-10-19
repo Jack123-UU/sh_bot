@@ -123,8 +123,12 @@ export function inngestServe({
   }
   let serveHost: string | undefined = undefined;
   if (process.env.NODE_ENV === "production") {
-    if (process.env.REPLIT_DOMAINS) {
+    if (process.env.RENDER_EXTERNAL_URL) {
+      serveHost = process.env.RENDER_EXTERNAL_URL;
+    } else if (process.env.REPLIT_DOMAINS) {
       serveHost = `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
+    } else if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+      serveHost = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
     }
   } else {
     // 开发环境使用动态内部地址，避免固定 5000 端口

@@ -5,8 +5,8 @@ import { realtimeMiddleware } from "@inngest/realtime";
 export const inngest = new Inngest(
   process.env.NODE_ENV === "production"
     ? {
-        id: "replit-agent-workflow",
-        name: "Replit Agent Workflow System",
+        id: "mastra-agent-workflow",
+        name: "Mastra Agent Workflow System",
       }
     : {
         id: "mastra",
