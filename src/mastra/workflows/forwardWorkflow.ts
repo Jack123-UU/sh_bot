@@ -115,7 +115,7 @@ ${hasVideo ? `- Video File ID: ${videoFileId}` : ''}
 - Telegram User ID（用于check-is-admin）: ${inputData.userId}
 - Message: "${messageText}"
 ${inputData.userName ? `- Username: @${inputData.userName}` : ''}
-- Chat ID（用于reply-message）: ${inputData.chatId}
+- Chat ID（用于reply-telegram-message）: ${inputData.chatId}
 
 任务: 处理管理员命令或回复用户
 1. 首先使用 check-is-admin 检查用户是否是管理员
