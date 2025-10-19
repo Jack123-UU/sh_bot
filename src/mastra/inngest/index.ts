@@ -137,7 +137,9 @@ export function inngestServe({
     }
     // Log warning if no external URL is configured
     else {
-      console.warn('[Inngest] Warning: No external URL configured in production. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable.');
+      console.warn(
+        "⚠️ [Inngest] No external URL configured. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable."
+      );
     }
   } else {
     // Development environment uses dynamic internal address
