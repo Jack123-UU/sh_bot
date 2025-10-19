@@ -64,5 +64,5 @@ databases:
   - name: aethermind-db
     databaseName: aethermind_bot
     region: oregon
-    plan: standard
+    plan: basic-1gb
     postgresMajorVersion: "15"
