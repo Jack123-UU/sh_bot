@@ -94,11 +94,11 @@ export const reviewAgent = new Agent({
     - 管理员和普通用户都会收到相同的欢迎语（从数据库获取）
     - 管理员会收到完整的Reply Keyboard菜单（⚙️ 设置、📊 统计、📢 频道管理、🔘 按钮管理、📝 修改欢迎语、❓ 帮助）
     - 普通用户只会收到"❓ 帮助"按钮
-    - 必须调用send-welcome-with-buttons工具，不要使用reply-message替代！
+    - 必须调用send-welcome-with-buttons工具，不要使用reply-telegram-message替代！
     
     **B. /help 命令：**
     1. 检查是否是管理员（check-is-admin）
-    2. 使用 reply-message 工具回复详细帮助文档
+    2. 使用 reply-telegram-message 工具回复详细帮助文档
        - 管理员：显示完整功能说明和操作指南
        - 普通用户：简单说明Bot功能
     
@@ -110,27 +110,27 @@ export const reviewAgent = new Agent({
     - "⚙️ 设置" → 
       1. 使用 check-is-admin 检查权限，传入提取的userId
       2. 如果isAdmin=true，使用 show-settings-menu 工具显示设置菜单
-      3. 如果isAdmin=false，使用 reply-message 回复"🚫 无权操作"
+      3. 如果isAdmin=false，使用 reply-telegram-message 回复"🚫 无权操作"
       
     - "📊 统计" → 
       1. 使用 check-is-admin 检查权限，传入提取的userId
       2. 如果isAdmin=true，显示系统统计信息
-      3. 如果isAdmin=false，使用 reply-message 回复"🚫 无权操作"
+      3. 如果isAdmin=false，使用 reply-telegram-message 回复"🚫 无权操作"
       
     - "📢 频道管理" → 
       1. 使用 check-is-admin 检查权限，传入提取的userId
-      2. 如果isAdmin=true：调用 list-source-channels → 使用 reply-message 发送格式化列表
-      3. 如果isAdmin=false：使用 reply-message 回复"🚫 无权操作"
+      2. 如果isAdmin=true：调用 list-source-channels → 使用 reply-telegram-message 发送格式化列表
+      3. 如果isAdmin=false：使用 reply-telegram-message 回复"🚫 无权操作"
       
     - "🔘 按钮管理" → 
       1. 使用 check-is-admin 检查权限，传入提取的userId
-      2. 如果isAdmin=true：调用 list-referral-buttons → 使用 reply-message 发送格式化的按钮列表（显示ID、文字、链接）
-      3. 如果isAdmin=false：使用 reply-message 回复"🚫 无权操作"
+      2. 如果isAdmin=true：调用 list-referral-buttons → 使用 reply-telegram-message 发送格式化的按钮列表（显示ID、文字、链接）
+      3. 如果isAdmin=false：使用 reply-telegram-message 回复"🚫 无权操作"
       
     - "📝 修改欢迎语" → 
       1. 使用 check-is-admin 检查权限，传入提取的userId
-      2. 如果isAdmin=true：调用 get-config → 使用 reply-message 发送当前欢迎语和修改提示
-      3. 如果isAdmin=false：使用 reply-message 回复"🚫 无权操作"
+      2. 如果isAdmin=true：调用 get-config → 使用 reply-telegram-message 发送当前欢迎语和修改提示
+      3. 如果isAdmin=false：使用 reply-telegram-message 回复"🚫 无权操作"
       
     - "❓ 帮助" → 同 /help 命令
     
@@ -141,8 +141,8 @@ export const reviewAgent = new Agent({
     - 如果不是管理员，回复"🚫 无权操作"
     
     **目标频道管理命令：**
-    - "查看目标频道" → 使用 target-channel-management 工具，action="view" → 使用 reply-message 发送结果
-    - "设置目标频道 [频道ID]" → 提取频道ID → 使用 target-channel-management 工具，action="set", channelId=提取的ID → 使用 reply-message 发送结果
+    - "查看目标频道" → 使用 target-channel-management 工具，action="view" → 使用 reply-telegram-message 发送结果
+    - "设置目标频道 [频道ID]" → 提取频道ID → 使用 target-channel-management 工具，action="set", channelId=提取的ID → 使用 reply-telegram-message 发送结果
     
     **管理员管理命令（工具会自动发送消息）：**
     - "查看管理员" → 
@@ -160,7 +160,7 @@ export const reviewAgent = new Agent({
        - 使用 send-to-review 工具发送到审核频道
        - 传入参数: text, messageId, hasPhoto, hasVideo, photoFileId, videoFileId
     3. 如果检测结果 isValid=false（不符合广告模板）:
-       - 使用 reply-message 回复："请使用下方键盘菜单或 /start 查看可用命令"
+       - 使用 reply-telegram-message 回复："请使用下方键盘菜单或 /start 查看可用命令"
     
     ### 4. 频道管理命令（仅管理员，私聊中使用）
     
@@ -169,9 +169,9 @@ export const reviewAgent = new Agent({
     - 如果不是管理员，回复"🚫 无权操作"
     
     **命令：**
-    - "添加监听频道 [ID]" → add-source-channel → reply with result
-    - "删除监听频道 [ID]" → remove-source-channel → reply with result  
-    - "列出监听频道" → list-source-channels → reply with formatted list
+    - "添加监听频道 [ID]" → add-source-channel → 使用 reply-telegram-message 发送结果
+    - "删除监听频道 [ID]" → remove-source-channel → 使用 reply-telegram-message 发送结果  
+    - "列出监听频道" → list-source-channels → 使用 reply-telegram-message 发送格式化列表
     
     ## 重要规则：
     
