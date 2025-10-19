@@ -2,7 +2,7 @@ import { Mastra } from "@mastra/core";
 import { MastraError } from "@mastra/core/error";
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";
-pimport pino from "pino";
+import pino from "pino";
 import { MCPServer } from "@mastra/mcp";
 import { NonRetriableError } from "inngest";
 import { z } from "zod";
@@ -70,7 +70,7 @@ export const mastra = new Mastra({
     allTools: new MCPServer({
       name: "allTools",
       version: "1.0.0",
-      tools: { 
+      tools: {
         templateDetectionTool,
         reviewCallbackTool,
         sendToReviewTool,
@@ -153,27 +153,27 @@ export const mastra = new Mastra({
         triggerType: "telegram/message",
         handler: async (mastra: Mastra, triggerInfo: any) => {
           const logger = mastra.getLogger();
-          
+
           // 2. 捕获所有异常
           try {
             console.log("📥 [生产环境] 处理消息:", JSON.stringify(triggerInfo, null, 2));
             logger?.info("📝 [Telegram Trigger] Received update:", { triggerInfo });
-            
+
             let chatId: string;
             let threadId: string;
-            
+
             // Handle callback query (button clicks)
             if (triggerInfo.params?.isCallback) {
               chatId = triggerInfo.payload?.callback_query?.message?.chat?.id?.toString();
               const userId = triggerInfo.payload?.callback_query?.from?.id?.toString() || chatId;
               threadId = `telegram/${chatId}`;
-              
-              logger?.info("🔘 [Telegram Trigger] Processing callback query", { 
+
+              logger?.info("🔘 [Telegram Trigger] Processing callback query", {
                 callbackData: triggerInfo.params?.callbackData,
                 chatId,
                 userId,
               });
-              
+
               const run = await mastra.getWorkflow("forwardWorkflow").createRunAsync();
               await run.start({
                 inputData: {
@@ -187,24 +187,24 @@ export const mastra = new Mastra({
                   callbackData: triggerInfo.params?.callbackData,
                 }
               });
-            } 
+            }
             // Handle regular message
             else {
-              chatId = triggerInfo.payload?.message?.chat?.id?.toString() || 
+              chatId = triggerInfo.payload?.message?.chat?.id?.toString() ||
                        triggerInfo.payload?.channel_post?.chat?.id?.toString();
               const userId = triggerInfo.payload?.message?.from?.id?.toString() || chatId;
               const message = JSON.stringify(triggerInfo.payload); // 传完整payload
               const userName = triggerInfo.params?.userName;
-              
+
               if (!chatId || !message) {
                 logger?.error("❌ [Telegram Trigger] Missing chatId or message");
                 return;
               }
-              
+
               threadId = `telegram/${chatId}`;
-              
+
               logger?.info("💬 [Telegram Trigger] Processing regular message", { chatId, threadId, userId });
-              
+
               const run = await mastra.getWorkflow("forwardWorkflow").createRunAsync();
               await run.start({
                 inputData: {
@@ -217,7 +217,7 @@ export const mastra = new Mastra({
                 }
               });
             }
-            
+
             logger?.info("✅ [Telegram Trigger] Workflow started");
           } catch (e) {
             console.error("❌ 生产环境消息处理失败:", e);
