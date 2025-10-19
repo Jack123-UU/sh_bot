@@ -1,5 +1,5 @@
 # AetherMind Technologies LLC - Render Deployment Configuration
-# ============================================================
+# =============================================================
 # This file configures automatic deployment on Render.com
 # Documentation: https://render.com/docs/blueprint-spec
 
@@ -10,8 +10,8 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    buildCommand: npm ci && npm run build
-    startCommand: node .mastra/output/index.mjs
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -48,7 +48,7 @@ services:
         value: "3100"
       - key: RATE_LIMIT_PER_MINUTE
         value: "120"
-    healthCheckPath: /api
+    healthCheckPath: /health
     autoDeploy: true
 
   # Redis Cache Service
@@ -64,5 +64,5 @@ databases:
   - name: aethermind-db
     databaseName: aethermind_bot
     region: oregon
-    plan: starter
+    plan: standard
     postgresMajorVersion: "15"
