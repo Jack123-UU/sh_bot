@@ -55,7 +55,7 @@ services:
   - type: redis
     name: aethermind-redis
     region: oregon
-    plan: starter
+    plan: standard
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
