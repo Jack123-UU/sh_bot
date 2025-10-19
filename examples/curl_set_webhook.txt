@@ -1,0 +1,1 @@
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=https://<your-render-domain>/webhooks/telegram/action"
