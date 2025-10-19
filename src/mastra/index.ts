@@ -2,7 +2,7 @@ import { Mastra } from "@mastra/core";
 import { MastraError } from "@mastra/core/error";
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";
-import pino from "pino";
+pimport pino from "pino";
 import { MCPServer } from "@mastra/mcp";
 import { NonRetriableError } from "inngest";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import { reviewCallbackTool } from "./tools/reviewCallbackTool";
 import { sendToReviewTool } from "./tools/sendToReviewTool";
 import { addSourceChannelTool, removeSourceChannelTool, listSourceChannelsTool } from "./tools/channelManagementTool";
 import { checkIsAdminTool } from "./tools/adminManagementTool";
+import { cacheHeaders } from "../middleware/cacheHeaders";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -100,8 +101,11 @@ export const mastra = new Mastra({
   },
   server: {
     host: "0.0.0.0",
-    port: 5000,
+    // Use Render's PORT if present, fallback to APP_PORT, then 5000
+    port: Number(process.env.PORT) || Number(process.env.APP_PORT) || 5000,
     middleware: [
+      // Set safe cache headers for edge caching
+      cacheHeaders,
       async (c, next) => {
         const mastra = c.get("mastra");
         const logger = mastra?.getLogger();
