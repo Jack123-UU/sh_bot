@@ -55,7 +55,7 @@ services:
   - type: redis
     name: aethermind-redis
     region: oregon
-    plan: starter
+    plan: standard
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
@@ -64,5 +64,5 @@ databases:
   - name: aethermind-db
     databaseName: aethermind_bot
     region: oregon
-    plan: starter
+    plan: standard
     postgresMajorVersion: "15"

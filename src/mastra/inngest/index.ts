@@ -5,6 +5,11 @@ import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { serve as originalInngestServe } from "inngest/hono";
 
+// 动态内部访问地址（Render/容器内或本地开发）
+const baseInternalUrl =
+  process.env.MASTRA_INTERNAL_URL ||
+  `http://127.0.0.1:${process.env.PORT || 5000}`;
+
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
 const {
   createWorkflow: originalCreateWorkflow,
@@ -41,17 +46,16 @@ export function registerApiRoute<P extends string>(
   inngestFunctions.push(
     inngest.createFunction(
       {
-        id: `api-${path.replace(/^\/+/, "").replaceAll(/\/+/g, "-")}`,
+        id: `api-${path.replace(/^\/+/g, "").replaceAll(/\/+/g, "-")}`,
         name: path,
       },
       {
-        event: `event/api.${path.replace(/^\/+/, "").replaceAll(/\/+/g, ".")}`,
+        event: `event/api.${path.replace(/^\/+/g, "").replaceAll(/\/+/g, ".")}`,
       },
       async ({ event, step }) => {
         await step.run("forward request to Mastra", async () => {
-          // It is hard to obtain an internal handle on the Hono server,
-          // so we just forward the request to the local Mastra server.
-          const response = await fetch(`http://localhost:5000${path}`, {
+          // 使用动态内部地址替代固定端口
+          const response = await fetch(`${baseInternalUrl}${path}`, {
             method: event.data.method,
             headers: event.data.headers,
             body: event.data.body,
@@ -63,12 +67,12 @@ export function registerApiRoute<P extends string>(
               response.status == 429 ||
               response.status == 408
             ) {
-              // 5XX, 429 (Rate-Limit Exceeded), 408 (Request Timeout) are retriable.
+              // 5XX、429、408 可重试
               throw new Error(
                 `Failed to forward request to Mastra: ${response.statusText}`,
               );
             } else {
-              // All other errors are non-retriable.
+              // 其他不可重试
               throw new NonRetriableError(
                 `Failed to forward request to Mastra: ${response.statusText}`,
               );
@@ -123,7 +127,8 @@ export function inngestServe({
       serveHost = `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
     }
   } else {
-    serveHost = "http://localhost:5000";
+    // 开发环境使用动态内部地址，避免固定 5000 端口
+    serveHost = baseInternalUrl;
   }
   return originalInngestServe({
     client: inngest,

@@ -3,15 +3,19 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "mastra dev",
     "build": "mastra build",
-    "start": "mastra dev",
+    "start": "node .mastra/output/index.mjs",
     "check": "tsc",
-    "check:format": "prettier --check '**/*.ts'",
-    "format": "prettier --write '**/*.ts'"
+    "check:format": "prettier --check \"**/*.ts\"",
+    "format": "prettier --write \"**/*.ts\""
   },
-  "keywords": ["telegram", "bot", "mastra", "agent"],
+  "keywords": [
+    "telegram",
+    "bot",
+    "mastra",
+    "agent"
+  ],
   "type": "module",
   "author": "AetherMind Technologies LLC",
   "license": "MIT",
