@@ -1,4 +1,12 @@
-import { pgTable, serial, varchar, timestamp, text, boolean, integer } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  varchar,
+  timestamp,
+  text,
+  boolean,
+  integer,
+} from "drizzle-orm/pg-core";
 
 // Keywords table removed - replaced by template-based ad detection
 
