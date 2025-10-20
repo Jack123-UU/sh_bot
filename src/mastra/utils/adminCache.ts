@@ -1,7 +1,7 @@
 /**
  * 管理员权限缓存模块
  * 减少数据库查询，提升性能
- * 
+ *
  * TTL: 5分钟
  * 缓存失效：添加/删除管理员时自动清除
  */
@@ -26,7 +26,7 @@ class AdminCache {
    */
   get(userId: string): boolean | null {
     const entry = this.cache.get(userId);
-    
+
     if (!entry) {
       return null; // 无缓存
     }
@@ -73,7 +73,10 @@ class AdminCache {
   /**
    * 获取缓存统计信息
    */
-  getStats(): { size: number; entries: Array<{ userId: string; isAdmin: boolean; age: number }> } {
+  getStats(): {
+    size: number;
+    entries: Array<{ userId: string; isAdmin: boolean; age: number }>;
+  } {
     const now = Date.now();
     const entries = Array.from(this.cache.entries()).map(([userId, entry]) => ({
       userId,
