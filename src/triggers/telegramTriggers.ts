@@ -1,6 +1,6 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
-import { registerApiRoute } from "../mastra/inngest";
+import { registerApiRoute } from "@mastra/core/server";
 import { Mastra } from "@mastra/core";
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
