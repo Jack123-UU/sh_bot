@@ -1,11 +1,13 @@
-{
+﻿{
   "name": "aethermind-bot-deployer",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",
-    "start": "node .mastra/output/index.mjs",
+    "start": "node scripts/init-db.js && node .mastra/output/index.mjs",
+    "start:dev": "node .mastra/output/index.mjs",
+    "init:db": "node scripts/init-db.js",
     "check": "tsc",
     "check:format": "prettier --check \"**/*.ts\"",
     "format": "prettier --write \"**/*.ts\""
