@@ -47,3 +47,6 @@ export function inngestServe({
     serveHost,
   });
 }
+
+// Export registerApiRoute from @mastra/inngest package
+export { registerApiRoute } from "@mastra/inngest";
