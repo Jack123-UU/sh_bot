@@ -1,0 +1,31 @@
+﻿name: Deploy sh_bot to Render
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Trigger Render Deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            curl -X POST $RENDER_DEPLOY_HOOK_URL
+            echo "鉁?Render deploy triggered successfully"
+          else
+            echo "鈿狅笍 RENDER_DEPLOY_HOOK_URL not set, skipping deploy trigger"
+          fi
