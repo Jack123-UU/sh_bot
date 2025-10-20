@@ -5,8 +5,8 @@ import { realtimeMiddleware } from "@inngest/realtime";
 export const inngest = new Inngest(
   process.env.NODE_ENV === "production"
     ? {
-        id: "aethermind-agent-workflow",
-        name: "AetherMind Agent Workflow System",
+        id: "mastra-agent-workflow",
+        name: "Correct Mastra Workflow System Name",
       }
     : {
         id: "mastra",
