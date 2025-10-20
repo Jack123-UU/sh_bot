@@ -1,6 +1,7 @@
 import { format } from "node:util";
 import { Mastra, type WorkflowResult, type Step } from "@mastra/core";
 import { IMastraLogger } from "@mastra/core/logger";
+import { registerApiRoute } from "@mastra/core/server";
 import {
   type AuthTestResponse,
   type ChatPostMessageResponse,
@@ -14,8 +15,6 @@ import {
 import type { Context, Handler, MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { z } from "zod";
-
-import { registerApiRoute } from "../mastra/inngest";
 
 export type Methods = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "ALL";
 
@@ -141,6 +140,7 @@ function checkDuplicateEvent(eventName: string) {
 }
 
 function createReactToMessage<
+  TState extends z.ZodObject<any>,
   TInput extends z.ZodType<any>,
   TOutput extends z.ZodType<any>,
   TSteps extends Step<string, any, any>[],
@@ -203,7 +203,7 @@ function createReactToMessage<
   return async function reactToMessage(
     channel: string,
     timestamp: string,
-    result: WorkflowResult<TInput, TOutput, TSteps> | null,
+    result: WorkflowResult<TState, TInput, TOutput, TSteps> | null,
   ) {
     // Remove all of our reactions.
     await removeAllReactions(channel, timestamp);
@@ -219,6 +219,7 @@ function createReactToMessage<
 
 export function registerSlackTrigger<
   Env extends { Variables: { mastra: Mastra } },
+  TState extends z.ZodObject<any>,
   TInput extends z.ZodType<any>,
   TOutput extends z.ZodType<any>,
   TSteps extends Step<string, any, any>[],
@@ -230,7 +231,7 @@ export function registerSlackTrigger<
   handler: (
     mastra: Mastra,
     triggerInfo: TriggerInfoSlackOnNewMessage,
-  ) => Promise<WorkflowResult<TInput, TOutput, TSteps> | null>;
+  ) => Promise<WorkflowResult<TState, TInput, TOutput, TSteps> | null>;
 }): Array<ApiRoute> {
   return [
     registerApiRoute("/webhooks/slack/action", {
