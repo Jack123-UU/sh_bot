@@ -6,7 +6,7 @@ export const inngest = new Inngest(
   process.env.NODE_ENV === "production"
     ? {
         id: "mastra-agent-workflow",
-        name: "Correct Mastra Workflow System Name",
+        name: "Mastra Agent Workflow System",
       }
     : {
         id: "mastra",
