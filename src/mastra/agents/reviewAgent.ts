@@ -1,4 +1,5 @@
 import { openai } from "@ai-sdk/openai";
+import { createGroq } from "@ai-sdk/groq";
 import { Agent } from "@mastra/core/agent";
 import { replyMessageTool } from "../tools/replyMessageTool";
 import { sendWelcomeWithButtonsTool } from "../tools/sendWelcomeWithButtonsTool";
@@ -21,32 +22,26 @@ import {
 import { settingsCallbackTool } from "../tools/settingsCallbackTool";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
-/**
- * Review Agent - Core AI Agent for Telegram Bot
- *
- * This agent handles:
- * - User commands (/start, /help, etc.)
- * - Admin management commands
- * - Template detection and review workflow
- * - Callback query handling (button clicks)
- */
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
-// Select model provider based on environment
 const openRouter = createOpenRouter({
   apiKey:
     process.env.AI_INTEGRATIONS_OPENAI_API_KEY ||
     process.env.OPENROUTER_API_KEY,
 });
 
-const modelProvider = process.env.AI_MODEL?.startsWith("openai/")
-  ? openai(process.env.AI_MODEL.replace("openai/", ""))
-  : process.env.AI_MODEL
-    ? openRouter(process.env.AI_MODEL || "meta-llama/llama-3.1-70b-instruct")
-    : openai("gpt-4o-mini");
+const modelProvider = process.env.GROQ_API_KEY
+  ? groq("llama-3.1-70b-versatile")
+  : process.env.AI_MODEL?.startsWith("openai/")
+    ? openai(process.env.AI_MODEL.replace("openai/"))
+    : process.env.AI_MODEL
+      ? openRouter(process.env.AI_MODEL || "meta-llama/llama-3.1-70b-instruct")
+      : openai("gpt-4o-mini");
 
 export const reviewAgent = new Agent({
   name: "Review Agent",
-
   instructions: `
 You are a Telegram bot assistant that manages channel moderation, admin commands, and user interactions.
 
@@ -164,9 +159,7 @@ When a button is clicked (isCallback=true):
 - Provide clear success/error feedback
 - Guide users on correct command format when needed
 `,
-
   model: modelProvider,
-
   tools: {
     replyMessageTool,
     sendWelcomeWithButtonsTool,
