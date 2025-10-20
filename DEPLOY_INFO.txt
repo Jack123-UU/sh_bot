@@ -3,6 +3,14 @@
 Created: 2025-10-18 02:01:54
 Version: 1.0.0
 
+## Repository Information
+
+Repository: Jack123-UU/sh_bot
+GitHub URL: https://github.com/Jack123-UU/sh_bot
+Local Path (during deployment): /home/runner/work/sh_bot/sh_bot
+
+## Package Contents
+
 This package contains all files needed for Render deployment.
 
 Please read RENDER_DEPLOYMENT_GUIDE.md for deployment instructions.

@@ -4,6 +4,8 @@
 
 A powerful Telegram bot deployment system built with Mastra framework, featuring advanced agent capabilities, workflow automation, and seamless integration with multiple AI providers.
 
+**Repository**: [`Jack123-UU/sh_bot`](https://github.com/Jack123-UU/sh_bot) | [Repository Info](REPOSITORY_INFO.md)
+
 ## 🚀 Features
 
 - **Telegram Bot Integration**: Full-featured Telegram bot with admin controls
