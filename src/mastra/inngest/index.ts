@@ -2,6 +2,9 @@ import { Inngest } from "inngest";
 import { serve } from "inngest/next";
 import { inngest } from "./client";
 
+// Export inngest so it can be imported by other modules
+export { inngest };
+
 let baseInternalUrl = "http://localhost:3000";
 try {
   if (process.env.RAILWAY_STATIC_URL) {
@@ -31,22 +34,25 @@ export function inngestServe({
     else if (process.env.RENDER_EXTERNAL_HOSTNAME) {
       serveHost = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
     }
+    // Railway static URL fallback
+    else if (process.env.RAILWAY_STATIC_URL) {
+      serveHost = `https://${process.env.RAILWAY_STATIC_URL}`;
+    }
     // Log warning if no external URL is configured
     else {
       console.warn(
-        "⚠️ [Inngest] No external URL configured. Set RENDER_EXTERNAL_URL or REPLIT_DOMAINS environment variable."
+        "⚠️ [Inngest] No external URL configured. Set RENDER_EXTERNAL_URL, RENDER_EXTERNAL_HOSTNAME, RAILWAY_STATIC_URL, or REPLIT_DOMAINS environment variable."
       );
     }
   } else {
-    // Development environment uses dynamic internal address
-    serveHost = baseInternalUrl;
+    // Development environment uses internal address
+    const port = process.env.PORT || process.env.APP_PORT || 5000;
+    serveHost = `http://127.0.0.1:${port}`;
   }
 
-  return serve(inngest, {
+  return serve({
+    client: inngest,
     functions: Array.from(functions),
     serveHost,
   });
 }
-
-// Export registerApiRoute from @mastra/inngest package
-export { registerApiRoute } from "@mastra/inngest";
