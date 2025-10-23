@@ -440,15 +440,15 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
 
   if (WEBHOOK_URL) {
     const path = "/webhook";
-    bot.telegram.setWebhook(`${WEBHOOK_URL}${path}`).then(()=>{
+    bot.telegram.setWebhook(`${WEBHOOK_URL}${path}`, { drop_pending_updates: true }).then(()=>{
       app.use(bot.webhookCallback(path));
       console.log(`✅ Webhook set: ${WEBHOOK_URL}${path}`);
     }).catch((e)=>{
       console.error("设置 Webhook 失败，回退到轮询：", e);
-      bot.launch().then(()=>console.log("✅ Bot started (polling)"));
+      bot.launch({ dropPendingUpdates: true }).then(()=>console.log("✅ Bot started (polling)"));
     });
   } else {
-    bot.launch().then(()=>console.log("✅ Bot started (polling)"));
+    bot.launch({ dropPendingUpdates: true }).then(()=>console.log("✅ Bot started (polling)"));
   }
   app.listen(PORT, "0.0.0.0", ()=>console.log(`🌐 Listening on ${PORT} (/healthz)`));
   process.once("SIGINT", ()=>bot.stop("SIGINT"));
