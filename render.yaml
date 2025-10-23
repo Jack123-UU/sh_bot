@@ -1,68 +1,60 @@
-# AetherMind Technologies LLC - Render Deployment Configuration
-# =============================================================
-# This file configures automatic deployment on Render.com
-# Documentation: https://render.com/docs/blueprint-spec
-
 services:
-  # Main Application Service
   - type: web
-    name: aethermind-bot
-    runtime: node
+    name: sh-bot
+    env: node
+    repo: https://github.com/Jack123-UU/sh_bot.git
+    branch: feat/mod-forward-bot   # ← 部署这个分支
     region: oregon
-    plan: starter
-    buildCommand: npm install --include=dev --ignore-scripts && npm run build
-    startCommand: npm start
+    plan: starter                  # 或 standard，按你账户来
+    numInstances: 1
+    healthCheckPath: /healthz
+
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+
     envVars:
-      - key: NODE_ENV
-        value: production
+      # —— Node 版本（Render 官方 Node 环境）
       - key: NODE_VERSION
-        value: "20.9.0"
+        value: 20.10.0
+
+      # —— 机器人必须
       - key: TELEGRAM_BOT_TOKEN
+        sync: false               # 到 Render Dashboard 里填
+      - key: FORWARD_TARGET_ID
+        sync: false               # 目标频道ID（负数开头）
+      - key: ADMIN_IDS
+        sync: false               # 管理员用户ID，逗号分隔
+
+      # —— 可选：统一审核频道 / 欢迎语 / 附带按钮 / 速率
+      - key: REVIEW_TARGET_ID
+        sync: false               # 审核频道ID；不设则逐个发管理员
+      - key: WELCOME_TEXT
         sync: false
-      - key: TELEGRAM_BOT_ADMIN_USERS
-        sync: false
-      - key: TELEGRAM_BOT_ENABLED
-        value: "true"
-      - key: TELEGRAM_BOT_RATE_LIMIT
-        value: "30"
-      - key: API_KEY
-        generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: aethermind-db
-          property: connectionString
+      - key: ATTACH_BUTTONS_TO_TARGET_META
+        value: "1"                # 1=转发后附带导航按钮说明
+      - key: PER_USER_COOLDOWN_MS
+        value: "3000"
+      - key: GLOBAL_MIN_TIME_MS
+        value: "60"
+
+      # —— 可选：Webhook（不填则使用轮询）
+      - key: WEBHOOK_URL
+        sync: false               # 例：https://你的服务名.onrender.com
+
+      # —— 持久化（二选一，默认 Redis）
+      - key: PERSIST_BACKEND
+        value: redis              # 改成 sqlite 则用下方磁盘+SQLITE_PATH
+
+      # Redis 方案（推荐：无需磁盘）
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: aethermind-redis
-          property: connectionString
-      - key: LOG_LEVEL
-        value: info
-      - key: LOG_FORMAT
-        value: json
-      - key: APP_PORT
-        value: "8080"
-      - key: MASTRA_API_URL
-        value: http://localhost:4111
-      - key: INNGEST_API_PORT
-        value: "3100"
-      - key: RATE_LIMIT_PER_MINUTE
-        value: "120"
-    healthCheckPath: /health
-    autoDeploy: true
+        sync: false               # 例：redis://user:pass@host:6379/0
 
-  # Redis Cache Service
-  - type: redis
-    name: aethermind-redis
-    region: oregon
-    plan: standard
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
+      # SQLite 方案（仅当 PERSIST_BACKEND=sqlite 时生效）
+      - key: SQLITE_PATH
+        value: /data/bot.db       # 需要下面的磁盘挂载
 
-# Database Service
-databases:
-  - name: aethermind-db
-    databaseName: aethermind_bot
-    region: oregon
-    plan: basic-1gb
-    postgresMajorVersion: "15"
+    # SQLite 才需要的磁盘；即使用 Redis，保留也不影响（只是闲置）
+    disks:
+      - name: botdata
+        mountPath: /data
+        sizeGB: 1
