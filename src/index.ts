@@ -116,72 +116,111 @@ bot.hears(/^菜单$/i, (ctx)=>{
   return void safeCall(()=>ctx.reply("暂无菜单按钮，管理员可用「添加按钮」命令新增。"));
 });
 
-/** ====== Main message handler (moderation flow) ====== */
-bot.on("message", async (ctx) => {
-  const fromId = ctx.from?.id; const chatId = ctx.chat?.id; const mid = (ctx.message as any)?.message_id;
-  if (!fromId || !chatId || !mid) return;
-
-  // Block/Allow
-  if (blocklistSet.has(fromId)) return;
-  if (allowlistMode && !allowlistSet.has(fromId) && !isAdmin(fromId)) {
-    await safeCall(()=>ctx.reply("🚫 未在白名单，消息不予处理"));
+/** ====== 共用：将一个消息入审核流 ====== */
+async function enqueueForReview(ctx: any, sourceChatId: number|string, messageId: number, fromId: number|undefined, fromName: string, rawMsg: any) {
+  // 黑名单 / 白名单
+  if (fromId && blocklistSet.has(fromId)) return;
+  if (allowlistMode && fromId && !allowlistSet.has(fromId) && !isAdmin(fromId)) {
+    await safeCall(()=>ctx.reply?.("🚫 未在白名单，消息不予处理"));
     return;
   }
-  // dedup
-  const key = `${chatId}:${mid}`; const now = Date.now();
+
+  // 去重（按 chat:mid）
+  const key = `${sourceChatId}:${messageId}`; const now = Date.now();
   if ((dedup.get(key)||0) + 1000 > now) return;
   dedup.set(key, now);
   for (const [k, ts] of dedup) if (now - ts > 60_000) dedup.delete(k);
-  // cooldown
-  const lastTs = userCooldown.get(fromId) || 0;
-  if (!isAdmin(fromId) && now - lastTs < PER_USER_COOLDOWN_MS) {
-    await safeCall(()=>ctx.reply(`⏳ 你发太快了，请 ${Math.ceil((PER_USER_COOLDOWN_MS - (now - lastTs))/1000)}s 后重试`));
-    return;
-  }
-  userCooldown.set(fromId, now);
 
-  // Admin bypass
-  if (isAdmin(fromId)) {
-    await forwardToTarget(ctx, chatId, mid, fromId, fromId, undefined);
-    return;
+  // 限速（仅对个人生效；频道发帖没有 fromId 时跳过）
+  if (fromId && !isAdmin(fromId)) {
+    const lastTs = userCooldown.get(fromId) || 0;
+    if (now - lastTs < PER_USER_COOLDOWN_MS) {
+      await safeCall(()=>ctx.reply?.(`⏳ 你发太快了，请 ${Math.ceil((PER_USER_COOLDOWN_MS - (now - lastTs))/1000)}s 后重试`));
+      return;
+    }
+    userCooldown.set(fromId, now);
   }
 
-  // Detect template
-  const txt = extractMessageText(ctx.message);
+  // 管理员直通（只有个人消息才考虑直通；频道发帖一律进入审核）
+  if (fromId && isAdmin(fromId) && ctx.message) {
+    await forwardToTarget(ctx, sourceChatId, messageId, fromId, fromId, undefined);
+    return;
+  }
+
+  // 模板侦测
+  const txt = extractMessageText(rawMsg);
   const hit = detectAdTemplate(txt);
 
-  // Enqueue pending
-  const id = `${now}_${chatId}_${mid}`;
-  const req: Req = { id, sourceChatId: chatId, messageId: mid, fromId, fromName: human(ctx.from), createdAt: now,
+  // 入队
+  const id = `${now}_${sourceChatId}_${messageId}`;
+  const req: Req = {
+    id, sourceChatId, messageId,
+    fromId: fromId ?? 0,
+    fromName,
+    createdAt: now,
     suspected: hit.matched ? { template: hit.name!, score: hit.score! } : undefined
   };
   await store.setPending(req);
-  await safeCall(()=>ctx.reply(hit.matched ? `📝 已提交审核（⚠️ 疑似模板：${req.suspected!.template}，score=${req.suspected!.score}）` : "📝 已提交审核，请等待管理员处理"));
 
-  // Send to review target or admins
+  // 给发起方一个回执（频道发帖不回；仅私聊/群聊回）
+  if (ctx.reply && ctx.chat?.type !== "channel") {
+    await safeCall(()=>ctx.reply(hit.matched ? `📝 已提交审核（⚠️ 疑似模板：${req.suspected!.template}，score=${req.suspected!.score}）` : "📝 已提交审核，请等待管理员处理"));
+  }
+
+  // 发审核卡片
   const reviewText = `🕵️ 审核请求 #${id}
-来自：${req.fromName} (ID:${fromId})
-来源 chatId: ${chatId}` + (hit.matched ? `
+来自：${fromName}${fromId ? ` (ID:${fromId})` : ""}
+来源 chatId: ${sourceChatId}` + (hit.matched ? `
 ⚠️ 疑似广告模板：${hit.name}（score=${hit.score}）` : "");
 
   const kb = Markup.inlineKeyboard([
     [Markup.button.callback("✅ 通过", `approve:${id}`), Markup.button.callback("❌ 拒绝", `reject:${id}`)],
-    [Markup.button.callback("⛔ 封禁此人", `ban:${fromId}`)]
+    [Markup.button.callback("⛔ 封禁此人", `ban:${fromId ?? 0}`)]
   ]);
 
+  // 先转发原消息，再发说明+按钮
   if (cfg.reviewTargetId) {
-    await safeCall(()=>ctx.telegram.forwardMessage(Number(cfg.reviewTargetId), chatId, mid));
+    await safeCall(()=>ctx.telegram.forwardMessage(Number(cfg.reviewTargetId), Number(sourceChatId), Number(messageId)));
     await safeCall(()=>ctx.telegram.sendMessage(Number(cfg.reviewTargetId), reviewText, kb));
   } else {
     for (const admin of cfg.adminIds) {
-      await safeCall(()=>ctx.telegram.forwardMessage(Number(admin), chatId, mid));
+      await safeCall(()=>ctx.telegram.forwardMessage(Number(admin), Number(sourceChatId), Number(messageId)));
       await safeCall(()=>ctx.telegram.sendMessage(Number(admin), reviewText, kb));
     }
   }
+}
+
+/** ====== 私聊/群：主消息处理（进入审核） ====== */
+bot.on("message", async (ctx:any) => {
+  const fromId = ctx.from?.id; const chatId = ctx.chat?.id; const mid = (ctx.message as any)?.message_id;
+  if (!chatId || !mid) return;
+
+  // Admin interactive input short-circuit
+  if (isAdmin(fromId) && (ctx.message as any)?.text) {
+    const sess = adminSessions.get(fromId!);
+    if (sess) {
+      await handleAdminSessionInput(ctx, ((ctx.message as any).text as string).trim(), sess);
+      adminSessions.delete(fromId!);
+      return;
+    }
+  }
+
+  await enqueueForReview(ctx, chatId, mid, fromId, human(ctx.from), ctx.message);
+});
+
+/** ====== 频道发帖：也进入审核 ====== */
+bot.on("channel_post", async (ctx:any)=>{
+  const chId = ctx.chat?.id; const post = ctx.channelPost as any;
+  if (!chId || !post?.message_id) return;
+
+  // 频道发帖没有个人 fromId，这里用频道自身ID标识来源，统一走审核，不直通
+  const fakeFromId = undefined;
+  const fromName = ctx.chat?.title ? `#频道：${ctx.chat.title}` : "频道发帖";
+  await enqueueForReview(ctx, chId, post.message_id, fakeFromId, fromName, post);
 });
 
 /** ====== Callback (approve/reject/ban) ====== */
-bot.on("callback_query", async (ctx) => {
+bot.on("callback_query", async (ctx:any) => {
   const cb: any = ctx.callbackQuery; const data: string = cb.data || ""; const adminId = ctx.from?.id;
   if (!isAdmin(adminId)) { await safeCall(()=>ctx.answerCbQuery("无权操作",{show_alert:true})); return; }
 
@@ -201,8 +240,8 @@ bot.on("callback_query", async (ctx) => {
     await safeCall(()=>ctx.answerCbQuery("已拒绝"));
   } else if (data.startsWith("ban:")) {
     const uid = Number(data.split(":")[1]);
-    blocklistSet.add(uid); await store.addBlock(uid);
-    await safeCall(()=>ctx.editMessageText(`⛔ 已封禁用户 ${uid}`));
+    if (uid) { blocklistSet.add(uid); await store.addBlock(uid); }
+    await safeCall(()=>ctx.editMessageText(`⛔ 已封禁用户 ${uid || "(频道/未知)"} `));
     await safeCall(()=>ctx.answerCbQuery("已封禁"));
   }
 });
@@ -271,8 +310,7 @@ bot.command("set_rate", async (ctx)=>{
   if (Number.isNaN(a)||Number.isNaN(b)) return void safeCall(()=>ctx.reply("❌ 参数必须为数字毫秒"));
   process.env.PER_USER_COOLDOWN_MS = String(a);
   process.env.GLOBAL_MIN_TIME_MS = String(b);
-  await safeCall(()=>ctx.reply(`✅ 已设置：每人冷却 ${a} ms，全局最小间隔 ${b} ms
-（重启后生效更稳）`));
+  await safeCall(()=>ctx.reply(`✅ 已设置：每人冷却 ${a} ms，全局最小间隔 ${b} ms\n（重启后生效更稳）`));
 });
 
 bot.command("toggle_allowlist", async (ctx)=>{
@@ -432,6 +470,264 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
   }
 }
 
+/** ====== Admin Settings Panel (inline) ====== */
+function panelMainKb() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("📣 频道", "panel:channels"), Markup.button.callback("🙋‍♂️ 欢迎语", "panel:welcome")],
+    [Markup.button.callback("🔗 按钮", "panel:buttons"), Markup.button.callback("🧰 模板", "panel:templates")],
+    [Markup.button.callback("🚦 速率", "panel:rate"), Markup.button.callback("🔒 白名单", "panel:allow")],
+    [Markup.button.callback("👑 管理员", "panel:admins"), Markup.button.callback("📊 统计", "panel:stats")]
+  ]);
+}
+
+// Admin interactive sessions (in-memory)
+const adminSessions = new Map<number, { key: string; data?: any }>();
+
+async function showAdminPanel(ctx: any) {
+  if (!isAdmin(ctx.from?.id)) return;
+  const text = `🛠 设置面板
+forwardTargetId: ${cfg.forwardTargetId}
+reviewTargetId: ${cfg.reviewTargetId || "(未设置)"}
+欢迎语: ${(cfg.welcomeText || "").slice(0,60)}${(cfg.welcomeText||"").length>60?"…":""}
+按钮: ${buttons.length} 个，模板: ${templates.length} 个
+白名单模式: ${allowlistMode ? "开启" : "关闭"}
+每人冷却: ${process.env.PER_USER_COOLDOWN_MS||PER_USER_COOLDOWN_MS} ms，全局间隔: ${process.env.GLOBAL_MIN_TIME_MS||GLOBAL_MIN_TIME_MS} ms`;
+  return safeCall(()=> (ctx as any).reply(text, panelMainKb()));
+}
+bot.command("panel", showAdminPanel);
+bot.command("settings", showAdminPanel);
+bot.command("menu_admin", showAdminPanel);
+
+// 引导式输入处理（管理员发送下一条文本时生效）
+async function handleAdminSessionInput(ctx: any, text: string, sess: {key:string; data?:any}) {
+  switch (sess.key) {
+    case "set_target": {
+      const id = text.trim();
+      if (!id) return (ctx as any).reply("❌ 请输入目标 Chat ID（形如 -100xxxxxxxxxx）");
+      cfg.forwardTargetId = id; await store.setConfig({ forwardTargetId: id });
+      return (ctx as any).reply(`✅ 已设置转发目标：${id}`);
+    }
+    case "set_review_target": {
+      const id = text.trim(); // 可留空以关闭
+      cfg.reviewTargetId = id; await store.setConfig({ reviewTargetId: id });
+      return (ctx as any).reply(`✅ 审核去向：${id || "(关闭)"}`);
+    }
+    case "set_welcome": {
+      cfg.welcomeText = text; await store.setConfig({ welcomeText: text });
+      await showWelcome(ctx);
+      return (ctx as any).reply("✅ 欢迎语已更新");
+    }
+    case "set_rate": {
+      const m = text.trim().split(/\s+/);
+      const a = Number(m[0]), b = Number(m[1]);
+      if (Number.isNaN(a)||Number.isNaN(b)) return (ctx as any).reply("❌ 用法示例：3000 60");
+      process.env.PER_USER_COOLDOWN_MS = String(a);
+      process.env.GLOBAL_MIN_TIME_MS = String(b);
+      return (ctx as any).reply(`✅ 已设置：每人冷却 ${a} ms，全局最小间隔 ${b} ms\n（重启后更稳）`);
+    }
+    case "btn_add": {
+      const parts = text.includes('|') ? text.split('|').map(s=>s.trim()) : text.split(/\s+/);
+      const [t,u,o] = parts; const order = Number(o);
+      if (!t||!isValidUrl(u)||Number.isNaN(order)) return (ctx as any).reply('❌ 用法：文字 | 链接 | 顺序');
+      buttons.push({ text:t, url:u, order }); await store.setButtons(buttons);
+      const kb = buildTrafficKeyboard(); if (kb) await (ctx as any).reply("预览：", kb);
+      return (ctx as any).reply("✅ 已添加按钮");
+    }
+    case "btn_set": {
+      const parts = text.includes('|') ? text.split('|').map(s=>s.trim()) : text.split(/\s+/);
+      const [idxStr,t,u,o] = parts; const idx = Number(idxStr)-1; const order = Number(o);
+      const sorted = [...buttons].sort((a,b)=>a.order-b.order);
+      if (Number.isNaN(idx)||idx<0||idx>=sorted.length||!isValidUrl(u)||Number.isNaN(order)) return (ctx as any).reply("❌ 用法：序号 | 文字 | 链接 | 顺序");
+      const target = sorted[idx]; const realIndex = buttons.findIndex(b=>b===target);
+      buttons[realIndex] = { text:t, url:u, order }; await store.setButtons(buttons);
+      const kb = buildTrafficKeyboard(); if (kb) await (ctx as any).reply("预览：", kb);
+      return (ctx as any).reply("✅ 已更新按钮");
+    }
+    case "btn_del": {
+      const idx = Number(text.trim())-1;
+      const sorted = [...buttons].sort((a,b)=>a.order-b.order);
+      if (Number.isNaN(idx)||idx<0||idx>=sorted.length) return (ctx as any).reply("❌ 用法：序号");
+      const target = sorted[idx]; buttons = buttons.filter(b=>b!==target); await store.setButtons(buttons);
+      return (ctx as any).reply("✅ 已删除按钮");
+    }
+    case "tpl_add": {
+      const parts = text.includes('|') ? text.split('|').map(s=>s.trim()) : [text.trim()];
+      if (parts.length<2) return (ctx as any).reply('❌ 用法：名称 | 内容 | [阈值0~1]');
+      const [name, content, thrRaw] = parts;
+      const thr = thrRaw!==undefined ? Number(thrRaw) : cfg.adtplDefaultThreshold;
+      if (Number.isNaN(thr)||thr<0||thr>1) return (ctx as any).reply("❌ 阈值应在 0~1 之间");
+      templates.push({ name, content, threshold: thr }); await store.setTemplates(templates);
+      return (ctx as any).reply(`✅ 已添加模板：${name}（thr=${thr}）`);
+    }
+    case "tpl_set": {
+      const parts = text.includes('|') ? text.split('|').map(s=>s.trim()) : text.split(/\s+/);
+      if (parts.length<4) return (ctx as any).reply('❌ 用法：序号 | 名称 | 内容 | 阈值');
+      const [idxStr,name,content,thrRaw] = parts; const idx = Number(idxStr)-1; const thr = Number(thrRaw);
+      if (Number.isNaN(idx)||idx<0||idx>=templates.length) return (ctx as any).reply("❌ 序号越界");
+      if (Number.isNaN(thr)||thr<0||thr>1) return (ctx as any).reply("❌ 阈值应在 0~1 之间");
+      templates[idx] = { name, content, threshold: thr }; await store.setTemplates(templates);
+      return (ctx as any).reply(`✅ 已更新模板 #${idx+1}`);
+    }
+    case "tpl_del": {
+      const idx = Number(text.trim())-1;
+      if (Number.isNaN(idx)||idx<0||idx>=templates.length) return (ctx as any).reply("❌ 用法：序号");
+      const t = templates[idx]; templates.splice(idx,1); await store.setTemplates(templates);
+      return (ctx as any).reply(`✅ 已删除模板：${t.name}`);
+    }
+    case "tpl_test": {
+      const norm = normalizeText(text); const a = ngrams(norm, norm.length>=3?3:2);
+      let best = { idx:-1, name:"", score:0, thr: cfg.adtplDefaultThreshold };
+      templates.forEach((tpl, i)=>{
+        const b = ngrams(normalizeText(tpl.content), tpl.content.length>=3?3:2);
+        const score = jaccard(a,b); if (score>best.score) best = { idx:i, name:tpl.name, score, thr: tpl.threshold };
+      });
+      if (best.idx>=0) return (ctx as any).reply(`最佳匹配：#${best.idx+1} ${best.name}  score=${best.score.toFixed(3)}  thr=${best.thr}`);
+      return (ctx as any).reply("无模板命中");
+    }
+    case "admins_add": {
+      const id = text.trim();
+      if (!id) return (ctx as any).reply("❌ 请输入数字用户ID");
+      if (!cfg.adminIds.includes(id)) cfg.adminIds.push(id);
+      await store.setConfig({ adminIds: cfg.adminIds });
+      return (ctx as any).reply(`✅ 已添加管理员：${id}`);
+    }
+    case "admins_del": {
+      const id = text.trim();
+      cfg.adminIds = cfg.adminIds.filter(x=>x!==id);
+      await store.setConfig({ adminIds: cfg.adminIds });
+      return (ctx as any).reply(`✅ 已移除管理员：${id}`);
+    }
+  }
+}
+
+bot.action(/^panel:/, async (ctx:any)=>{
+  if (!isAdmin(ctx.from?.id)) return void (ctx as any).answerCbQuery("无权限",{show_alert:true});
+  const data: string = (ctx.callbackQuery as any).data;
+  const uid = ctx.from.id;
+
+  if (data==="panel:channels") {
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("📌 设置目标ID", "panel:set_target"), Markup.button.callback("🕵️ 审核去向", "panel:set_review")],
+      [Markup.button.callback("🧹 清空审核去向", "panel:clear_review")],
+      [Markup.button.callback("⬅️ 返回", "panel:back")]
+    ]);
+    await safeCall(()=> (ctx as any).editMessageText(`📣 频道设置
+当前目标：${cfg.forwardTargetId}
+审核去向：${cfg.reviewTargetId || "(逐个发管理员)"}`, kb));
+  } else if (data==="panel:set_target") {
+    adminSessions.set(uid,{key:"set_target"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply("请发送目标 Chat ID（如 -100xxxxxxxxxx）"));
+  } else if (data==="panel:set_review") {
+    adminSessions.set(uid,{key:"set_review_target"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply("请发送审核去向的 Chat ID（可填个人/群/频道），留空表示关闭"));
+  } else if (data==="panel:clear_review") {
+    cfg.reviewTargetId = ""; await store.setConfig({ reviewTargetId: "" });
+    await safeCall(()=> (ctx as any).answerCbQuery("已清空"));
+    await safeCall(()=> (ctx as any).editMessageText("✅ 已清空审核去向"));
+  } else if (data==="panel:welcome") {
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("✏️ 修改欢迎语", "panel:set_welcome")],
+      [Markup.button.callback("⬅️ 返回", "panel:back")]
+    ]);
+    await safeCall(()=> (ctx as any).editMessageText(`🙋‍♂️ 欢迎语（当前预览）：
+${cfg.welcomeText || "(未设置)"}\n\n点击下方修改。`, kb));
+  } else if (data==="panel:set_welcome") {
+    adminSessions.set(uid,{key:"set_welcome"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply("请发送新的欢迎语文本"));
+  } else if (data==="panel:buttons") {
+    const sorted = [...buttons].sort((a,b)=>a.order-b.order);
+    const list = sorted.map((b,i)=>`${i+1}. [${b.text}] ${b.url} （顺序:${b.order}）`).join("\n") || "（空）";
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("➕ 新增", "panel:btn_add"), Markup.button.callback("🛠 修改", "panel:btn_set")],
+      [Markup.button.callback("🗑 删除", "panel:btn_del"), Markup.button.callback("👀 预览", "panel:btn_preview")],
+      [Markup.button.callback("⬅️ 返回", "panel:back")]
+    ]);
+    await safeCall(()=> (ctx as any).editMessageText(`🔗 按钮（${buttons.length} 个）
+${list}\n\n操作：`, kb));
+  } else if (data==="panel:btn_add") {
+    adminSessions.set(uid,{key:"btn_add"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请按格式发送：\n文字 | 链接 | 顺序\n例如：\n官网 | https://example.com | 1'));
+  } else if (data==="panel:btn_set") {
+    adminSessions.set(uid,{key:"btn_set"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请按格式发送：\n序号 | 文字 | 链接 | 顺序\n例如：\n2 | 社区 | https://t.me/xxx | 5'));
+  } else if (data==="panel:btn_del") {
+    adminSessions.set(uid,{key:"btn_del"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请发送要删除的按钮序号（通过 /btn_list 或「按钮」面板查看序号）'));
+  } else if (data==="panel:btn_preview") {
+    const kb = buildTrafficKeyboard();
+    if (kb) await safeCall(()=> (ctx as any).reply("预览：", kb));
+    else await safeCall(()=> (ctx as any).reply("（当前没有按钮）"));
+    await safeCall(()=> (ctx as any).answerCbQuery());
+  } else if (data==="panel:templates") {
+    const list = templates.map((t,i)=>`${i+1}. ${t.name} thr=${t.threshold}`).join("\n") || "（空）";
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("➕ 新增", "panel:tpl_add"), Markup.button.callback("🛠 修改", "panel:tpl_set")],
+      [Markup.button.callback("🗑 删除", "panel:tpl_del"), Markup.button.callback("🧪 测试", "panel:tpl_test")],
+      [Markup.button.callback("⬅️ 返回", "panel:back")]
+    ]);
+    await safeCall(()=> (ctx as any).editMessageText(`🧰 模板（${templates.length} 个）
+${list}\n\n操作：`, kb));
+  } else if (data==="panel:tpl_add") {
+    adminSessions.set(uid,{key:"tpl_add"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请按格式发送：\n名称 | 内容 | [阈值0~1]\n例如：\n加群引流 | VX：xxxx，进群送资料 | 0.6'));
+  } else if (data==="panel:tpl_set") {
+    adminSessions.set(uid,{key:"tpl_set"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请按格式发送：\n序号 | 名称 | 内容 | 阈值\n例如：\n1 | 加群引流 | VX：xxxx | 0.65'));
+  } else if (data==="panel:tpl_del") {
+    adminSessions.set(uid,{key:"tpl_del"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请发送要删除的模板序号'));
+  } else if (data==="panel:tpl_test") {
+    adminSessions.set(uid,{key:"tpl_test"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('发送任意文本进行匹配测试：\n（也可用命令 /adtpl_test "文本"）'));
+  } else if (data==="panel:rate") {
+    adminSessions.set(uid,{key:"set_rate"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply('请发送：每人冷却ms 全局间隔ms\n例如：3000 60'));
+  } else if (data==="panel:allow") {
+    allowlistMode = !allowlistMode; cfg.allowlistMode = allowlistMode;
+    await store.setConfig({ allowlistMode });
+    await safeCall(()=> (ctx as any).answerCbQuery(`白名单模式：${allowlistMode?"开启":"关闭"}`));
+    await safeCall(()=> (ctx as any).editMessageText(`🔒 白名单模式：${allowlistMode?"开启":"关闭"}`, Markup.inlineKeyboard([[Markup.button.callback("⬅️ 返回", "panel:back")]])));
+  } else if (data==="panel:admins") {
+    const list = cfg.adminIds.join("\n") || "（空）";
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback("➕ 添加", "panel:admins_add"), Markup.button.callback("🗑 删除", "panel:admins_del")],
+      [Markup.button.callback("⬅️ 返回", "panel:back")]
+    ]);
+    await safeCall(()=> (ctx as any).editMessageText(`👑 管理员（${cfg.adminIds.length} 人）
+${list}`, kb));
+  } else if (data==="panel:admins_add") {
+    adminSessions.set(uid,{key:"admins_add"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply("请发送要添加的管理员【数字ID】"));
+  } else if (data==="panel:admins_del") {
+    adminSessions.set(uid,{key:"admins_del"});
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).reply("请发送要删除的管理员【数字ID】"));
+  } else if (data==="panel:stats") {
+    const text = `📊 统计
+按钮：${buttons.length}
+模板：${templates.length}
+管理员：${cfg.adminIds.length}
+白名单：${allowlistSet.size}；黑名单：${blocklistSet.size}`;
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await safeCall(()=> (ctx as any).editMessageText(text, Markup.inlineKeyboard([[Markup.button.callback("⬅️ 返回","panel:back")]])));
+  } else if (data==="panel:back") {
+    await safeCall(()=> (ctx as any).answerCbQuery());
+    await showAdminPanel(ctx);
+  }
+});
+
 /** ====== Startup ====== */
 (async () => {
   await loadAll();
@@ -440,16 +736,19 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
 
   if (WEBHOOK_URL) {
     const path = "/webhook";
-    bot.telegram.setWebhook(`${WEBHOOK_URL}${path}`, { drop_pending_updates: true }).then(()=>{
+    bot.telegram.setWebhook(`${WEBHOOK_URL}${path}`).then(()=>{
       app.use(bot.webhookCallback(path));
       console.log(`✅ Webhook set: ${WEBHOOK_URL}${path}`);
     }).catch((e)=>{
       console.error("设置 Webhook 失败，回退到轮询：", e);
-      bot.launch({ dropPendingUpdates: true }).then(()=>console.log("✅ Bot started (polling)"));
+      bot.launch({ allowedUpdates: ['message','callback_query','channel_post'] })
+        .then(()=>console.log("✅ Bot started (polling)"));
     });
   } else {
-    bot.launch({ dropPendingUpdates: true }).then(()=>console.log("✅ Bot started (polling)"));
+    bot.launch({ allowedUpdates: ['message','callback_query','channel_post'] })
+      .then(()=>console.log("✅ Bot started (polling)"));
   }
+
   app.listen(PORT, "0.0.0.0", ()=>console.log(`🌐 Listening on ${PORT} (/healthz)`));
   process.once("SIGINT", ()=>bot.stop("SIGINT"));
   process.once("SIGTERM", ()=>bot.stop("SIGTERM"));
