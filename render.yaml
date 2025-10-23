@@ -1,68 +1,49 @@
-# AetherMind Technologies LLC - Render Deployment Configuration
-# =============================================================
-# This file configures automatic deployment on Render.com
-# Documentation: https://render.com/docs/blueprint-spec
-
 services:
-  # Main Application Service
   - type: web
-    name: aethermind-bot
-    runtime: node
-    region: oregon
-    plan: starter
+    name: aethermind-bot            # 服务名，想改可改为你的
+    env: node
+    plan: starter                   # 需要更大可改 standard
+    autoDeploy: true
     buildCommand: npm install --include=dev --ignore-scripts && npm run build
     startCommand: npm start
+    healthCheckPath: /healthz
+
+    # 持久化：挂载 /data，用于 SQLite 文件
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NODE_VERSION
-        value: "20.9.0"
+      # 机密（在 Render 控制台填写），不会被仓库值覆盖
       - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: TELEGRAM_BOT_ADMIN_USERS
+      - key: FORWARD_TARGET_ID
         sync: false
-      - key: TELEGRAM_BOT_ENABLED
-        value: "true"
-      - key: TELEGRAM_BOT_RATE_LIMIT
-        value: "30"
-      - key: API_KEY
-        generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: aethermind-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: aethermind-redis
-          property: connectionString
-      - key: LOG_LEVEL
-        value: info
-      - key: LOG_FORMAT
-        value: json
-      - key: APP_PORT
-        value: "8080"
-      - key: MASTRA_API_URL
-        value: http://localhost:4111
-      - key: INNGEST_API_PORT
-        value: "3100"
-      - key: RATE_LIMIT_PER_MINUTE
-        value: "120"
-    healthCheckPath: /health
-    autoDeploy: true
+      - key: ADMIN_IDS
+        sync: false
+      # 可选机密
+      - key: REVIEW_TARGET_ID
+        sync: false
+      - key: WELCOME_TEXT
+        sync: false
 
-  # Redis Cache Service
-  - type: redis
-    name: aethermind-redis
-    region: oregon
-    plan: standard
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
+      # 运行时参数
+      - key: NODE_VERSION
+        value: 20.10.0
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=512
 
-# Database Service
-databases:
-  - name: aethermind-db
-    databaseName: aethermind_bot
-    region: oregon
-    plan: basic-1gb
-    postgresMajorVersion: "15"
+      # 业务可选
+      - key: ATTACH_BUTTONS_TO_TARGET_META
+        value: "1"
+      - key: PER_USER_COOLDOWN_MS
+        value: "3000"
+      - key: GLOBAL_MIN_TIME_MS
+        value: "60"
+
+      # —— 存储选 SQLite ——（重点）
+      - key: PERSIST_BACKEND
+        value: sqlite
+      - key: SQLITE_PATH
+        value: /data/bot.db
