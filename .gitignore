@@ -1,0 +1,4 @@
+
+# local backups
+backup/
+*.bak
