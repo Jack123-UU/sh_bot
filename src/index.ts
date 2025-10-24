@@ -19,7 +19,7 @@ bot.use(async (ctx, next) => {
   
   // 标准化文本和命令列表
   const normalized = text.replace(/\s+/g, '').toLowerCase();
-  const adminCmds = ['设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语', '帮助', '❓帮助'];
+  const adminCmds = ['设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语'];
   const isAdminCommand = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
   
   // 如果不是管理员，拦截管理命令
@@ -63,16 +63,12 @@ bot.use(async (ctx, next) => {
       await askOnce(ctx as any, "请发送新的欢迎语（支持Markdown）", "set_welcome");
       return;
     }
-    if (normalized === '帮助' || normalized === '❓帮助') {
-      await safeCall(() => ctx.reply(
-`🆘 帮助
-• 私聊或在监听的频道/群内发送投稿，命中模板则标记"疑似模板"后进入审核。
-• 管理员审核通过后，转发到目标频道。
-• 点击"菜单"可查看精选导航按钮。
-• 管理员使用"⚙️ 管理设置面板"进行全部配置。`
-      ));
-      return;
-    }
+  } catch (err) {
+    console.error("[ADMIN_MW]", err);
+  }
+});
+// ===== INJECTED_ADMIN_MW: END =====
+    
   } catch (err) {
     console.error("[ADMIN_MW]", err);
   }
@@ -863,9 +859,10 @@ async function handleAdminInput(ctx: any, adminId: number) {
         if (thrRaw!==undefined) {
           thr = Number(thrRaw); if (Number.isNaN(thr)||thr<0||thr>1) return void ctx.reply("❌ 阈值应在 0~1 之间");
         }
-        templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
+                templates.push({ name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) }); 
         await store.setTemplates(templates);
-        await ctx.reply(`✅ 已更新 #${idx+1}`, buildSubmenu("adtpl"));
+        await ctx.reply(`✅ 已添加：${name}`);
+        await ctx.reply("🧩 广告模板", buildSubmenu("adtpl"));
         break;
       }
       case "adtpl_del": {
