@@ -69,12 +69,7 @@ bot.use(async (ctx, next) => {
 });
 // ===== INJECTED_ADMIN_MW: END =====
     
-  } catch (err) {
-    console.error("[ADMIN_MW]", err);
-  }
-});
-// ===== INJECTED_ADMIN_MW: END =====
-
+  
 bot.use(async (ctx, next) => {
   try {
     await next();
@@ -851,7 +846,7 @@ async function handleAdminInput(ctx: any, adminId: number) {
         await ctx.reply(`✅ 已添加：${name}` , buildSubmenu("adtpl"));
         break;
       }
-      case "adtpl_set": {
+            case "adtpl_set": {
         if (args.length<3) return void ctx.reply('❌ 用法：序号 "名称" "模板内容" [阈值0~1]');
         const [idxStr,name,content,thrRaw] = args; const idx = Number(idxStr)-1;
         if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void ctx.reply("❌ 序号越界");
@@ -859,9 +854,9 @@ async function handleAdminInput(ctx: any, adminId: number) {
         if (thrRaw!==undefined) {
           thr = Number(thrRaw); if (Number.isNaN(thr)||thr<0||thr>1) return void ctx.reply("❌ 阈值应在 0~1 之间");
         }
-                templates.push({ name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) }); 
+                templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
         await store.setTemplates(templates);
-        await ctx.reply(`✅ 已添加：${name}`);
+        await ctx.reply(`✅ 已更新 #${idx + 1}`);
         await ctx.reply("🧩 广告模板", buildSubmenu("adtpl"));
         break;
       }
