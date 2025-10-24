@@ -781,14 +781,17 @@ bot.on("callback_query", async (ctx) => {
 
 /** ====== 一次性输入引导 ====== */
 async function askOnce(ctx: any, tip: string, kind: PendingKind) {
-  await safeCall(()=>ctx.answerCbQuery());
+  // 只在 callback_query 时调用 answerCbQuery
+  if ('callbackQuery' in ctx.update) {
+    await safeCall(()=>ctx.answerCbQuery());
+  }
   await safeCall(async ()=> {
     const m = await ctx.replyWithMarkdown(tip + "\n\n（请**直接回复这条消息**输入）", { reply_markup: { force_reply: true } });
     pendingInput.set(ctx.from.id, { kind, messageId: (m as any).message_id });
   });
 }
 
-// 把管理员的"回复本条消息"的输入解析并落库
+
 // 把管理员的"回复本条消息"的输入解析并落库
 async function handleAdminInput(ctx: any, adminId: number) {
   const pend = pendingInput.get(adminId);
@@ -797,9 +800,11 @@ async function handleAdminInput(ctx: any, adminId: number) {
   const repliedId = (ctx.message as any).reply_to_message?.message_id;
   if (!repliedId || repliedId !== pend.messageId) return;
 
+  // 立即删除 pendingInput，防止重复处理
+  pendingInput.delete(adminId);
+
   const raw: string = String((ctx.message as any).text || "").trim();
   const args = raw.match(/\"([^\"]+)\"|'([^']+)'|(\S+)/g)?.map((s: string)=>s.replace(/^['\"]|['\"]$/g,"")) || [];
-
   try {
     switch (pend.kind) {
       case "set_target": {
@@ -963,11 +968,9 @@ async function handleAdminInput(ctx: any, adminId: number) {
         break;
       }
     }
-  } catch (err) {
+   } catch (err) {
     console.error("[handleAdminInput] Error:", err);
     await safeCall(()=>ctx.reply("❌ 操作失败，请查看日志"));
-  } finally {
-    pendingInput.delete(adminId);
   }
 }
 
