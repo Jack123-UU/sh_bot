@@ -27,6 +27,86 @@ bot.use(async (ctx, next) => {
 });
 const app = express();
 app.use(express.json());
+/* ===== Stable forwarding guard: only forward matched templates ===== */
+
+// —— 基础工具 —— //
+function isPrivate(ctx: any) {
+  return ctx.chat?.type === 'private';
+}
+function isCommandText(s?: string) {
+  return !!s && s.startsWith('/');
+}
+function getMessageText(ctx: any): string {
+  const m = (ctx.message || ctx.channelPost || ctx.editedMessage || ctx.editedChannelPost) as any;
+  return m?.text || m?.caption || '';
+}
+function isTooOldCtx(ctx: any, maxAgeSec: number) {
+  const m = (ctx.message || ctx.channelPost || ctx.editedMessage || ctx.editedChannelPost) as any;
+  if (!m?.date) return false;
+  const age = Math.floor(Date.now() / 1000) - Number(m.date);
+  return age > maxAgeSec;
+}
+// 来源白名单（你文件里已有 sourcesAllow: Set<string>）
+function isAllowedSource(ctx: any, sourcesAllow: Set<string>) {
+  const chat = ctx.chat || {};
+  const uname = chat.username ? `@${chat.username}`.toLowerCase() : '';
+  const idStr = chat.id ? String(chat.id) : '';
+  if (sourcesAllow.size === 0) return true;  // 未配置白名单则放行到下一步
+  return sourcesAllow.has(uname) || sourcesAllow.has(idStr);
+}
+
+// —— 简单模板匹配 —— //
+// 用当前已保存的 templates 和 (tpl.threshold || cfg.adtplDefaultThreshold || 0.6)
+// 以“模板内容里的字段命中比例”做粗匹配（不依赖其它私有函数，避免编译找不到）
+function textMatchesTemplates(text: string): boolean {
+  if (!text) return false;
+  if (!templates || templates.length === 0) return false;
+
+  const norm = text.replace(/\s+/g, '');
+  for (const tpl of templates) {
+    const content = (tpl as any).content || '';
+    const thr = Number((tpl as any).threshold ?? (cfg?.adtplDefaultThreshold ?? 0.6));
+    const parts = String(content).split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) continue;
+
+    let hit = 0, need = 0;
+    for (let p of parts) {
+      const bare = p.replace(/[:：]\s*$/, ''); // “价格：” -> “价格”
+      if (!bare) continue;
+      need++;
+      if (norm.includes(bare.replace(/\s+/g, ''))) hit++;
+    }
+    const score = need ? hit / need : 0;
+    if (need && score >= thr) return true;
+  }
+  return false;
+}
+
+// —— 全局守卫中间件（消息/频道贴） —— //
+bot.use(async (ctx, next) => {
+  const upd: any = ctx.update;
+  const isMsg = !!(upd.message || upd.channel_post || upd.edited_message || upd.edited_channel_post);
+  if (!isMsg) return next(); // 不是消息（例如回调），放过
+
+  const text = getMessageText(ctx);
+
+  // 1) 命令 -> 交给命令处理器，不拦截
+  if (isCommandText(text)) return next();
+
+  // 2) 来源白名单（如果已配置）
+  if (!isAllowedSource(ctx, sourcesAllow)) return;
+
+  // 3) 消息太旧 -> 忽略
+  if (isTooOldCtx((ctx.message ?? (ctx as any).channelPost), MAX_MESSAGE_AGE_SEC)) return;
+
+  // 4) 只有命中模板的内容才允许进入后续（你的原始转发/审核逻辑）
+  const ok = textMatchesTemplates(text);
+  if (!ok) return;
+
+  return next();
+});
+
+/* ===== End guard ===== */
 
 // -------- Metrics ----------
 const START_TS = Date.now();
