@@ -167,19 +167,24 @@ bot.use(async (ctx, next) => {
   // 1) 命令 -> 交给命令处理器，不拦截
   if (isCommandText(text)) return next();
 
-  // 2) 来源白名单（如果已配置）
+  // 2) 底部按钮命令 -> 直接放行（包括帮助、菜单等）
+  const normalized = text.replace(/\s+/g, '').toLowerCase();
+  const buttonCmds = ['帮助', '❓帮助', '菜单', '开始', '设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语'];
+  const isButtonCmd = buttonCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
+  if (isButtonCmd) return next();
+
+  // 3) 来源白名单（如果已配置）
   if (!(await isAllowedSource(ctx, sourcesAllow))) return;
 
-  // 3) 消息太旧 -> 忽略
+  // 4) 消息太旧 -> 忽略
   if (isTooOldCtx((ctx.message ?? (ctx as any).channelPost), MAX_MESSAGE_AGE_SEC)) return;
 
-  // 4) 只有命中模板的内容才允许进入后续（你的原始转发/审核逻辑）
+  // 5) 只有命中模板的内容才允许进入后续（你的原始转发/审核逻辑）
   const ok = textMatchesTemplates(text);
   if (!ok) return;
 
   return next();
 });
-
 /* ===== End guard ===== */
 
 // -------- Metrics ----------
