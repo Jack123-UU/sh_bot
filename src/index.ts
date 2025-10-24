@@ -19,7 +19,9 @@ bot.use(async (ctx, next) => {
   
   // 如果不是管理员，拦截管理命令
   if (!(await isAdmin(fromId))) {
-           const isAdminCommand = /^(⚙️\s*设置|📊\s*统计|📣\s*频道管理|🔘\s*按钮管理|📝\s*修改欢迎语|❓\s*帮助|设置|统计|频道管理|按钮管理|修改欢迎语|帮助)$/i.test(text);
+               const normalized = text.replace(/\s+/g, '').toLowerCase();
+    const adminCmds = ['设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语', '帮助', '❓帮助'];
+    const isAdminCommand = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
     if (isAdminCommand && text) {
       await safeCall(() => ctx.reply("🚫 你无权操作"));
       return;
@@ -29,19 +31,19 @@ bot.use(async (ctx, next) => {
   
   if (!text) return next();
   
-   const isHit = /^(⚙️\s*设置|📊\s*统计|📣\s*频道管理|🔘\s*按钮管理|📝\s*修改欢迎语|❓\s*帮助|设置|统计|频道管理|按钮管理|修改欢迎语|帮助)$/i.test(text);
+    const isHit = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
   if (!isHit) return next();
   
   try {
-    if (/^设置$/i.test(text)) {
+    if (normalized === '设置' || normalized === '⚙️设置') {
       await safeCall(() => ctx.reply("⚙️ 管理设置面板", buildAdminPanel()));
       return;
     }
-    if (/^统计$/i.test(text)) {
+    if (normalized === '统计' || normalized === '📊统计') {
       await safeCall(() => ctx.reply("📊 统计\n\n" + buildStatsText(), buildAdminPanel()));
       return;
     }
-    if (/^频道管理$/i.test(text)) {
+    if (normalized === '频道管理' || normalized === '📣频道管理') {
       const quick = Markup.inlineKeyboard([[
         Markup.button.callback("🎯 目标频道", "panel:set_target"),
         Markup.button.callback("🔍 审核频道", "panel:set_review")
@@ -51,15 +53,15 @@ bot.use(async (ctx, next) => {
       await safeCall(() => ctx.reply("📣 频道快捷入口", quick));
       return;
     }
-    if (/^按钮管理$/i.test(text)) {
+    if (normalized === '按钮管理' || normalized === '🔘按钮管理') {
       await safeCall(() => ctx.reply("🔘 引流按钮管理", buildSubmenu("buttons")));
       return;
     }
-       if (/^修改欢迎语$/i.test(text)) {
+      if (normalized === '修改欢迎语' || normalized === '📝修改欢迎语') {
       await askOnce(ctx as any, "请发送新的欢迎语（支持Markdown）", "set_welcome");
       return;
     }
-    if (/^(❓\s*)?帮助$/i.test(text)) {
+   if (normalized === '帮助' || normalized === '❓帮助') {
       await safeCall(() => ctx.reply(
 `🆘 帮助
 • 私聊或在监听的频道/群内发送投稿，命中模板则标记"疑似模板"后进入审核。
@@ -94,7 +96,10 @@ const app = express();
 app.use(express.json());
 
 // ===== BOTTOM_KB6: BEGIN =====
-function buildReplyKeyboard() {
+function buildReplyKeyboard(isAdmin: boolean = false) {
+  if (!isAdmin) {
+    return Markup.keyboard([["❓ 帮助"]]).resize(true).oneTime(false);
+  }
   return Markup.keyboard([
     ["⚙️ 设置", "📊 统计"],
     ["📣 频道管理", "🔘 按钮管理"],
@@ -424,7 +429,8 @@ async function loadAll() {
 
 /** ====== Welcome/Menu/Help/Stats ====== */
 async function showWelcome(ctx: Context) {
-  await safeCall(() => (ctx as any).reply(cfg.welcomeText, buildReplyKeyboard()));
+ const userIsAdmin = await isAdmin(ctx.from?.id);
+await safeCall(() => (ctx as any).reply(cfg.welcomeText, buildReplyKeyboard(userIsAdmin)));
   const nav = buildTrafficKeyboard();
   if (nav) await safeCall(() => (ctx as any).reply("👇 精选导航", nav));
   if (await isAdmin(ctx.from?.id)) {
