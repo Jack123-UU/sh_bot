@@ -10,6 +10,21 @@ import { buildStore, Store } from "./store";
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 if (!TOKEN) throw new Error("缺少 TELEGRAM_BOT_TOKEN");
 const bot = new Telegraf(TOKEN);
+bot.use(async (ctx, next) => {
+  try {
+    await next();
+  } finally {
+    if ("callback_query" in ctx.update) {
+      try { await ctx.answerCbQuery(); } catch (e) {}
+    }
+  }
+});
+bot.use(async (ctx, next) => {
+  await next();
+  if ("callback_query" in ctx.update) {
+    try { await ctx.answerCbQuery(); } catch (e) {}
+  }
+});
 const app = express();
 app.use(express.json());
 
@@ -266,8 +281,8 @@ function buildStatsText() {
 }
 
 /** ====== Menu triggers ====== */
-bot.start((ctx)=>showWelcome(ctx));
-bot.hears(/^开始$/i, (ctx)=>showWelcome(ctx));
+bot.start(async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await showAdminPanel(ctx as any); } });
+bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await showAdminPanel(ctx as any); } });
 bot.hears(/^菜单$/i, async (ctx)=>{
   if (isAdmin(ctx.from?.id)) { await safeCall(()=>ctx.reply("⚙️ 管理设置面板", buildAdminPanel())); return; }
   const nav = buildTrafficKeyboard();
@@ -768,6 +783,22 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
 /** ====== Startup ====== */
 (async () => {
   await loadAll();
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "start", description: "开始" },
+      { command: "help",  description: "帮助" },
+      { command: "menu",  description: "打开菜单" },
+      { command: "stats", description: "查看统计" }
+    ]);
+  } catch (e) { console.error("setMyCommands error", e); }
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "start", description: "开始" },
+      { command: "help",  description: "帮助" },
+      { command: "menu",  description: "打开菜单" },
+      { command: "stats", description: "查看统计" }
+    ]);
+  } catch (e) { console.error("setMyCommands error", e); }
   const WEBHOOK_URL = process.env.WEBHOOK_URL || "";
   const PORT = Number(process.env.PORT || 3000);
 
