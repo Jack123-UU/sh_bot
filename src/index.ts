@@ -802,79 +802,79 @@ async function handleAdminInput(ctx: any, adminId: number) {
   try {
     switch (pend.kind) {
       case "set_target": {
-        if (!raw) return void ctx.reply("❌ 不能为空");
+        if (!raw) return void await safeCall(()=>ctx.reply("❌ 不能为空"));
         cfg.forwardTargetId = raw;
         await store.setConfig({ forwardTargetId: raw } as any);
-        await ctx.reply(`✅ 转发目标已更新：${raw}`, buildAdminPanel());
+        await safeCall(()=>ctx.reply(`✅ 转发目标已更新：${raw}`, buildAdminPanel()));
         break;
       }
       case "set_review": {
         cfg.reviewTargetId = raw || "";
         await store.setConfig({ reviewTargetId: cfg.reviewTargetId } as any);
-        await ctx.reply(`✅ 审核频道已设置为：${cfg.reviewTargetId || "(关闭，逐个发管理员)"}`, buildAdminPanel());
+        await safeCall(()=>ctx.reply(`✅ 审核频道已设置为：${cfg.reviewTargetId || "(关闭，逐个发管理员)"}`, buildAdminPanel()));
         break;
       }
       case "set_welcome": {
-        if (!raw) return void ctx.reply("❌ 不能为空");
+        if (!raw) return void await safeCall(()=>ctx.reply("❌ 不能为空"));
         cfg.welcomeText = raw;
         await store.setConfig({ welcomeText: raw } as any);
-        await ctx.reply("✅ 欢迎语已更新"); await showWelcome(ctx);
+        await safeCall(()=>ctx.reply("✅ 欢迎语已更新")); await showWelcome(ctx);
         break;
       }
       case "rate_set": {
-        if (args.length < 2) return void ctx.reply("❌ 用法：<每人冷却ms> <全局最小间隔ms>，例如 3000 60");
+        if (args.length < 2) return void await safeCall(()=>ctx.reply("❌ 用法：<每人冷却ms> <全局最小间隔ms>，例如 3000 60"));
         const a = Number(args[0]), b = Number(args[1]);
-        if (Number.isNaN(a)||Number.isNaN(b)) return void ctx.reply("❌ 必须是数字");
+        if (Number.isNaN(a)||Number.isNaN(b)) return void await safeCall(()=>ctx.reply("❌ 必须是数字"));
         process.env.PER_USER_COOLDOWN_MS = String(a);
         process.env.GLOBAL_MIN_TIME_MS = String(b);
-        await ctx.reply(`✅ 已设置：每人冷却 ${a} ms，全局最小间隔 ${b} ms\n（重启后生效更稳）`, buildSubmenu("rate"));
+        await safeCall(()=>ctx.reply(`✅ 已设置：每人冷却 ${a} ms，全局最小间隔 ${b} ms\n（重启后生效更稳）`, buildSubmenu("rate")));
         break;
       }
       case "btn_add": {
-        if (buttons.length >= MAX_BUTTONS) return void ctx.reply(`❌ 已达上限 ${MAX_BUTTONS} 个`);
-        if (args.length<3) return void ctx.reply('❌ 用法："显示文字" 链接 顺序');
+        if (buttons.length >= MAX_BUTTONS) return void await safeCall(()=>ctx.reply(`❌ 已达上限 ${MAX_BUTTONS} 个`));
+        if (args.length<3) return void await safeCall(()=>ctx.reply('❌ 用法："显示文字" 链接 顺序'));
         const [text,url,orderStr] = args; const order = Number(orderStr);
-        if (!isValidUrl(url)||Number.isNaN(order)) return void ctx.reply("❌ 参数不合法");
+        if (!isValidUrl(url)||Number.isNaN(order)) return void await safeCall(()=>ctx.reply("❌ 参数不合法"));
         buttons.push({ text, url, order }); await store.setButtons(buttons);
-        await ctx.reply("✅ 已添加"); await showButtonsPreview(ctx);
+        await safeCall(()=>ctx.reply("✅ 已添加")); await showButtonsPreview(ctx);
         break;
       }
       case "btn_set": {
-        if (args.length<4) return void ctx.reply('❌ 用法：序号 "显示文字" 链接 顺序');
+        if (args.length<4) return void await safeCall(()=>ctx.reply('❌ 用法：序号 "显示文字" 链接 顺序'));
         const [idxStr,text,url,orderStr] = args;
         const idx = Number(idxStr)-1; const order = Number(orderStr);
         const sorted = [...buttons].sort((a,b)=>a.order-b.order);
-        if (idx<0 || idx>=sorted.length || !isValidUrl(url) || Number.isNaN(order)) return void ctx.reply("❌ 参数不合法或序号越界");
+       if (idx<0 || idx>=sorted.length || !isValidUrl(url) || Number.isNaN(order)) return void await safeCall(()=>ctx.reply("❌ 参数不合法或序号越界"));
         const target = sorted[idx]; const realIndex = buttons.findIndex(b=>b===target);
         buttons[realIndex] = { text, url, order }; await store.setButtons(buttons);
-        await ctx.reply("✅ 已更新"); await showButtonsPreview(ctx);
+       await safeCall(()=>ctx.reply("✅ 已更新")); await showButtonsPreview(ctx);
         break;
       }
       case "btn_del": {
         const idx = Number(raw)-1;
         const sorted = [...buttons].sort((a,b)=>a.order-b.order);
-        if (Number.isNaN(idx)||idx<0||idx>=sorted.length) return void ctx.reply("❌ 序号越界（先点\"列表\"看序号）");
+        if (Number.isNaN(idx)||idx<0||idx>=sorted.length) return void await safeCall(()=>ctx.reply("❌ 序号越界（先点\"列表\"看序号）"));
         const target = sorted[idx]; buttons = buttons.filter(b=>b!==target); await store.setButtons(buttons);
-        await ctx.reply("✅ 已删除"); await showButtonsPreview(ctx);
+        await safeCall(()=>ctx.reply("✅ 已删除")); await showButtonsPreview(ctx);
         break;
       }
             case "adtpl_add": {
-        if (args.length<2) return void ctx.reply('❌ 用法："名称" "模板内容" [阈值0~1]');
+       if (args.length<2) return void await safeCall(()=>ctx.reply('❌ 用法："名称" "模板内容" [阈值0~1]'));
         const [name, content, thrRaw] = args;
         const thr = thrRaw!==undefined ? Number(thrRaw) : undefined;
-        if (thr!==undefined && (Number.isNaN(thr) || thr<0 || thr>1)) return void ctx.reply("❌ 阈值应在 0~1 之间");
+       if (thr!==undefined && (Number.isNaN(thr) || thr<0 || thr>1)) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
         templates.push({ name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) });
         await store.setTemplates(templates);
         await safeCall(()=>ctx.reply(`✅ 已添加：${name}`, buildSubmenu("adtpl")));
         break;
       }
             case "adtpl_set": {
-        if (args.length<3) return void ctx.reply('❌ 用法：序号 "名称" "模板内容" [阈值0~1]');
+        if (args.length<3) return void await safeCall(()=>ctx.reply('❌ 用法：序号 "名称" "模板内容" [阈值0~1]'));
         const [idxStr,name,content,thrRaw] = args; const idx = Number(idxStr)-1;
-        if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void ctx.reply("❌ 序号越界");
+       if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void await safeCall(()=>ctx.reply("❌ 序号越界"));
         let thr: number|undefined = undefined;
         if (thrRaw!==undefined) {
-          thr = Number(thrRaw); if (Number.isNaN(thr)||thr<0||thr>1) return void ctx.reply("❌ 阈值应在 0~1 之间");
+          thr = Number(thrRaw); if (Number.isNaN(thr)||thr<0||thr>1) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
         }
                 templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
         await store.setTemplates(templates);
@@ -883,7 +883,7 @@ async function handleAdminInput(ctx: any, adminId: number) {
       }
       case "adtpl_del": {
         const idx = Number(raw)-1;
-        if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void ctx.reply("❌ 序号越界");
+        if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void await safeCall(()=>ctx.reply("❌ 序号越界"));
         const t = templates[idx]; templates.splice(idx,1); await store.setTemplates(templates);
         await safeCall(()=>ctx.reply(`✅ 已删除：${t.name}`, buildSubmenu("adtpl")));
         break;
@@ -896,69 +896,69 @@ async function handleAdminInput(ctx: any, adminId: number) {
           const b = ngrams(normalizeText(tpl.content), tpl.content.length>=3?3:2);
           const score = jaccard(a,b); if (score>best.score) best = { idx:i, name:tpl.name, score, thr: tpl.threshold ?? cfg.adtplDefaultThreshold ?? 0.6 };
         });
-        if (best.idx>=0) await ctx.reply(`最佳匹配：#${best.idx+1} ${best.name}  score=${best.score.toFixed(3)}  thr=${best.thr}`);
-        else await ctx.reply("无模板");
+        if (best.idx>=0) await safeCall(()=>ctx.reply(`最佳匹配：#${best.idx+1} ${best.name}  score=${best.score.toFixed(3)}  thr=${best.thr}`));
+        else await safeCall(()=>ctx.reply("无模板"));
         break;
       }
       case "adtpl_thr": {
         const thr = Number(raw);
-        if (Number.isNaN(thr)||thr<0||thr>1) return void ctx.reply("❌ 阈值应在 0~1 之间");
+        if (Number.isNaN(thr)||thr<0||thr>1) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
         cfg.adtplDefaultThreshold = thr;
         await store.setConfig({ adtplDefaultThreshold: thr } as any);
-        await ctx.reply(`✅ 全局阈值已更新为 ${thr}`, buildSubmenu("adtpl"));
+        await safeCall(()=>ctx.reply(`✅ 全局阈值已更新为 ${thr}`, buildSubmenu("adtpl")));
         break;
       }
       case "admins_add": {
-        if (!raw) return void ctx.reply("❌ 不能为空");
+        if (!raw) return void await safeCall(()=>ctx.reply("❌ 不能为空"));
         if (!cfg.adminIds.includes(raw)) cfg.adminIds.push(raw);
         await store.setConfig({ adminIds: cfg.adminIds } as any);
-        await ctx.reply(`✅ 已添加管理员：${raw}`, buildSubmenu("admins"));
+        await safeCall(()=>ctx.reply(`✅ 已添加管理员：${raw}`, buildSubmenu("admins")));
         break;
       }
       case "admins_del": {
         cfg.adminIds = cfg.adminIds.filter(x=>x!==raw);
         await store.setConfig({ adminIds: cfg.adminIds } as any);
-        await ctx.reply(`✅ 已移除管理员：${raw}`, buildSubmenu("admins"));
+       await safeCall(()=>ctx.reply(`✅ 已移除管理员：${raw}`, buildSubmenu("admins")));
         break;
       }
       case "allow_add": {
-        const id = Number(raw); if (!id) return void ctx.reply("❌ 需要数字ID");
+       const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
         allowlistSet.add(id); await store.addAllow(id);
-        await ctx.reply(`✅ 已加入白名单：${id}`, buildSubmenu("lists"));
+       await safeCall(()=>ctx.reply(`✅ 已加入白名单：${id}`, buildSubmenu("lists")));
         break;
       }
       case "allow_del": {
-        const id = Number(raw); if (!id) return void ctx.reply("❌ 需要数字ID");
+        const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
         allowlistSet.delete(id); await store.removeAllow(id);
-        await ctx.reply(`✅ 已移出白名单：${id}`, buildSubmenu("lists"));
+        await safeCall(()=>ctx.reply(`✅ 已移出白名单：${id}`, buildSubmenu("lists")));
         break;
       }
       case "block_add": {
-        const id = Number(raw); if (!id) return void ctx.reply("❌ 需要数字ID");
+        const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
         blocklistSet.add(id); await store.addBlock(id);
-        await ctx.reply(`🚫 已拉黑：${id}`, buildSubmenu("lists"));
+        await safeCall(()=>ctx.reply(`🚫 已拉黑：${id}`, buildSubmenu("lists")));
         break;
       }
       case "block_del": {
-        const id = Number(raw); if (!id) return void ctx.reply("❌ 需要数字ID");
+        const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
         blocklistSet.delete(id); await store.removeBlock(id);
-        await ctx.reply(`✅ 已解封：${id}`, buildSubmenu("lists"));
+        await safeCall(()=>ctx.reply(`✅ 已解封：${id}`, buildSubmenu("lists")));
         break;
       }
       case "sources_add": {
-        if (!raw) return void ctx.reply("❌ 不能为空");
+        if (!raw) return void await safeCall(()=>ctx.reply("❌ 不能为空"));
         sourcesAllow.add(String(raw));
         cfg.sourcesAllow = [...sourcesAllow];
         await store.setConfig({ sourcesAllow: cfg.sourcesAllow as any });
-        await ctx.reply(`✅ 已加入来源白名单：${raw}`, buildSubmenu("sources"));
+        await safeCall(()=>ctx.reply(`✅ 已加入来源白名单：${raw}`, buildSubmenu("sources")));
         break;
       }
       case "sources_del": {
-        if (!raw) return void ctx.reply("❌ 不能为空");
+        if (!raw) return void await safeCall(()=>ctx.reply("❌ 不能为空"));
         sourcesAllow.delete(String(raw));
         cfg.sourcesAllow = [...sourcesAllow];
         await store.setConfig({ sourcesAllow: cfg.sourcesAllow as any });
-        await ctx.reply(`✅ 已移除：${raw}`, buildSubmenu("sources"));
+        await safeCall(()=>ctx.reply(`✅ 已移除：${raw}`, buildSubmenu("sources")));
         break;
       }
     }
