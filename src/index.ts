@@ -257,10 +257,6 @@ function buildTrafficKeyboard() {
   for (let i=0; i<sorted.length; i+=2) rows.push(sorted.slice(i,i+2).map(b=>Markup.button.url(b.text,b.url)));
   return Markup.inlineKeyboard(rows);
 }
-function buildReplyKeyboard() {
-  // “开始”放左侧第一位；底部多一个“帮助”；“统计”也保留
-  return Markup.keyboard([["开始","帮助"],["菜单","统计"]]).resize(true).oneTime(false);
-}
 
 // —— 管理面板（按钮式）——
 function buildAdminPanel() {
@@ -930,20 +926,8 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
   // ONLY_START_CMDS: 覆盖命令菜单为仅 /start
   try { await bot.telegram.setMyCommands([{ command: "start", description: "开始" }]); } catch(e) { console.error(e); }
   try {
-    await bot.telegram.setMyCommands([
-      { command: "start", description: "开始" },
-      { command: "help",  description: "帮助" },
-      { command: "menu",  description: "打开菜单" },
-      { command: "stats", description: "查看统计" }
-    ]);
   } catch (e) { console.error("setMyCommands error", e); }
   try {
-    await bot.telegram.setMyCommands([
-      { command: "start", description: "开始" },
-      { command: "help",  description: "帮助" },
-      { command: "menu",  description: "打开菜单" },
-      { command: "stats", description: "查看统计" }
-    ]);
   } catch (e) { console.error("setMyCommands error", e); }
   const WEBHOOK_URL = process.env.WEBHOOK_URL || "";
   const PORT = Number(process.env.PORT || 3000);
