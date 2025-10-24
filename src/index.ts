@@ -865,7 +865,7 @@ async function handleAdminInput(ctx: any, adminId: number) {
         if (thr!==undefined && (Number.isNaN(thr) || thr<0 || thr>1)) return void ctx.reply("❌ 阈值应在 0~1 之间");
         templates.push({ name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) });
         await store.setTemplates(templates);
-        await ctx.reply(`✅ 已添加：${name}`, buildSubmenu("adtpl"));
+        await safeCall(()=>ctx.reply(`✅ 已添加：${name}`, buildSubmenu("adtpl")));
         break;
       }
             case "adtpl_set": {
@@ -878,14 +878,14 @@ async function handleAdminInput(ctx: any, adminId: number) {
         }
                 templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
         await store.setTemplates(templates);
-        await ctx.reply(`✅ 已更新 #${idx + 1}`, buildSubmenu("adtpl"));
+        await safeCall(()=>ctx.reply(`✅ 已更新 #${idx + 1}`, buildSubmenu("adtpl")));
         break;
       }
       case "adtpl_del": {
         const idx = Number(raw)-1;
         if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void ctx.reply("❌ 序号越界");
         const t = templates[idx]; templates.splice(idx,1); await store.setTemplates(templates);
-        await ctx.reply(`✅ 已删除：${t.name}`, buildSubmenu("adtpl"));
+        await safeCall(()=>ctx.reply(`✅ 已删除：${t.name}`, buildSubmenu("adtpl")));
         break;
       }
       case "adtpl_test": {
