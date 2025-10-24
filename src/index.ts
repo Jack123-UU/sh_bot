@@ -281,8 +281,8 @@ function buildStatsText() {
 }
 
 /** ====== Menu triggers ====== */
-bot.start(async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await showAdminPanel(ctx as any); } });
-bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await showAdminPanel(ctx as any); } });
+bot.start(async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
+bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
 bot.hears(/^菜单$/i, async (ctx)=>{
   if (isAdmin(ctx.from?.id)) { await safeCall(()=>ctx.reply("⚙️ 管理设置面板", buildAdminPanel())); return; }
   const nav = buildTrafficKeyboard();
