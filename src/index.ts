@@ -16,17 +16,23 @@ const bot = new Telegraf(TOKEN);
 bot.use(async (ctx, next) => {
   const fromId = ctx.from?.id;
   const text = extractMessageText((ctx as any).message).trim();
-  // 仅管理员触发；非管理员/无文本 -> 放行
-  if (!(await isAdmin(fromId)) || !text) return next();
-  // 只拦截：开始/设置/统计/频道管理/按钮管理/修改欢迎语/帮助 以及 /start
-  const isHit = /^(开始|设置|统计|频道管理|按钮管理|修改欢迎语|帮助)$/i.test(text) || /^\/(start)$/i.test(text);
-  if (!isHit) return next();
-  try {
-    if (/^开始$/i.test(text) || /^\/start$/i.test(text)) {
-      await showWelcome(ctx as any);
-      await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel()));
-      return; // 不再进入后续 message 流
+  
+  // 如果不是管理员，拦截管理命令
+  if (!(await isAdmin(fromId))) {
+    const isAdminCommand = /^(设置|统计|频道管理|按钮管理|修改欢迎语)$/i.test(text);
+    if (isAdminCommand && text) {
+      await safeCall(() => ctx.reply("🚫 你无权操作"));
+      return;
     }
+    return next();
+  }
+  
+  if (!text) return next();
+  
+  const isHit = /^(设置|统计|频道管理|按钮管理|修改欢迎语)$/i.test(text);
+  if (!isHit) return next();
+  
+  try {
     if (/^设置$/i.test(text)) {
       await safeCall(() => ctx.reply("⚙️ 管理设置面板", buildAdminPanel()));
       return;
@@ -50,17 +56,12 @@ bot.use(async (ctx, next) => {
       return;
     }
     if (/^修改欢迎语$/i.test(text)) {
-      await askOnce(ctx, "请发送新的欢迎语文本：", "set_welcome");
+      await askOnce(ctx as any, "请发送新的欢迎语（支持Markdown）", "set_welcome");
       return;
     }
-    if (/^帮助$/i.test(text)) {
-      await safeCall(() => ctx.reply(
-        `🆘 帮助\n• 只有命中模板的贴文才会进入审核；管理员可设置目标/审核频道、引流按钮、白/黑名单、模板等。\n• 发送"开始"可显示底部菜单；如需导航，请用精选按钮或设置面板。`
-      ));
-      return;
-    }
-  } catch(e) { console.error("admin ui mw error", e); }
-  return next();
+  } catch (err) {
+    console.error("[ADMIN_MW]", err);
+  }
 });
 // ===== INJECTED_ADMIN_MW: END =====
 
@@ -435,8 +436,8 @@ function buildStatsText() {
 }
 
 /** ====== Menu triggers ====== */
-bot.start(async (ctx)=>{ await showWelcome(ctx); if (await isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
-bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (await isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
+bot.start(async (ctx) => { await showWelcome(ctx); });
+bot.hears(/^开始$/i, async (ctx) => { await showWelcome(ctx); });
 bot.hears(/^菜单$/i, async (ctx)=>{
   if (await isAdmin(ctx.from?.id)) { await safeCall(()=>ctx.reply("⚙️ 管理设置面板", buildAdminPanel())); return; }
   const nav = buildTrafficKeyboard();
