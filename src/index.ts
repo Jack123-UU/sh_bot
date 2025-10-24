@@ -10,6 +10,59 @@ import { buildStore, Store } from "./store";
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 if (!TOKEN) throw new Error("缺少 TELEGRAM_BOT_TOKEN");
 const bot = new Telegraf(TOKEN);
+
+// ===== INJECTED_ADMIN_MW: BEGIN =====
+bot.use(async (ctx, next) => {
+  const fromId = ctx.from?.id;
+  const text = extractMessageText((ctx as any).message).trim();
+  // 仅管理员触发；非管理员/无文本 -> 放行
+  if (!isAdmin(fromId) || !text) return next();
+  // 只拦截：开始/设置/统计/频道管理/按钮管理/修改欢迎语/帮助 以及 /start
+  const isHit = /^(开始|设置|统计|频道管理|按钮管理|修改欢迎语|帮助)$/i.test(text) || /^\/(start)$/i.test(text);
+  if (!isHit) return next();
+  try {
+    if (/^开始$/i.test(text) || /^\/start$/i.test(text)) {
+      await showWelcome(ctx as any);
+      await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel()));
+      return; // 不再进入后续 message 流
+    }
+    if (/^设置$/i.test(text)) {
+      await safeCall(() => ctx.reply("⚙️ 管理设置面板", buildAdminPanel()));
+      return;
+    }
+    if (/^统计$/i.test(text)) {
+      await safeCall(() => ctx.reply("📊 统计\n\n" + buildStatsText(), buildAdminPanel()));
+      return;
+    }
+    if (/^频道管理$/i.test(text)) {
+      const quick = Markup.inlineKeyboard([[
+        Markup.button.callback("🎯 目标频道", "panel:set_target"),
+        Markup.button.callback("🔍 审核频道", "panel:set_review")
+      ], [
+        Markup.button.callback("⬅️ 返回", "panel:back")
+      ]]);
+      await safeCall(() => ctx.reply("📣 频道快捷入口", quick));
+      return;
+    }
+    if (/^按钮管理$/i.test(text)) {
+      await safeCall(() => ctx.reply("🔘 引流按钮管理", buildSubmenu("buttons")));
+      return;
+    }
+    if (/^修改欢迎语$/i.test(text)) {
+      await askOnce(ctx, "请发送新的欢迎语文本：", "set_welcome");
+      return;
+    }
+    if (/^帮助$/i.test(text)) {
+      await safeCall(() => ctx.reply(
+        `🆘 帮助\n• 只有命中模板的贴文才会进入审核；管理员可设置目标/审核频道、引流按钮、白/黑名单、模板等。\n• 发送“开始”可显示底部菜单；如需导航，请用精选按钮或设置面板。`
+      ));
+      return;
+    }
+  } catch(e) { console.error("admin ui mw error", e); }
+  return next();
+});
+// ===== INJECTED_ADMIN_MW: END =====
+
 bot.use(async (ctx, next) => {
   try {
     await next();
@@ -27,6 +80,17 @@ bot.use(async (ctx, next) => {
 });
 const app = express();
 app.use(express.json());
+
+// ===== BOTTOM_KB6: BEGIN =====
+function buildReplyKeyboard() {
+  return Markup.keyboard([
+    ["⚙️ 设置", "📊 统计"],
+    ["📣 频道管理", "🔘 按钮管理"],
+    ["📝 修改欢迎语", "❓ 帮助"]
+  ]).resize(true).oneTime(false);
+}
+// ===== BOTTOM_KB6: END =====
+
 /* ===== Stable forwarding guard: only forward matched templates ===== */
 
 // —— 基础工具 —— //
@@ -863,6 +927,8 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
 /** ====== Startup ====== */
 (async () => {
   await loadAll();
+  // ONLY_START_CMDS: 覆盖命令菜单为仅 /start
+  try { await bot.telegram.setMyCommands([{ command: "start", description: "开始" }]); } catch(e) { console.error(e); }
   try {
     await bot.telegram.setMyCommands([
       { command: "start", description: "开始" },
