@@ -2,3 +2,15 @@
 # local backups
 backup/
 *.bak
+
+# local backups & build artifacts
+backup/
+*.bak
+*.fixbak.*
+*.fixpre.*
+*.dedupe.*
+*.tmp
+build.log
+*.yaml.bak
+sh_bot*.patch
+dist/
