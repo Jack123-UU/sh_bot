@@ -17,11 +17,13 @@ bot.use(async (ctx, next) => {
   const fromId = ctx.from?.id;
   const text = extractMessageText((ctx as any).message).trim();
   
+  // 标准化文本和命令列表
+  const normalized = text.replace(/\s+/g, '').toLowerCase();
+  const adminCmds = ['设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语', '帮助', '❓帮助'];
+  const isAdminCommand = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
+  
   // 如果不是管理员，拦截管理命令
   if (!(await isAdmin(fromId))) {
-               const normalized = text.replace(/\s+/g, '').toLowerCase();
-    const adminCmds = ['设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语', '帮助', '❓帮助'];
-    const isAdminCommand = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
     if (isAdminCommand && text) {
       await safeCall(() => ctx.reply("🚫 你无权操作"));
       return;
@@ -31,7 +33,7 @@ bot.use(async (ctx, next) => {
   
   if (!text) return next();
   
-    const isHit = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
+  const isHit = adminCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
   if (!isHit) return next();
   
   try {
@@ -57,11 +59,11 @@ bot.use(async (ctx, next) => {
       await safeCall(() => ctx.reply("🔘 引流按钮管理", buildSubmenu("buttons")));
       return;
     }
-      if (normalized === '修改欢迎语' || normalized === '📝修改欢迎语') {
+    if (normalized === '修改欢迎语' || normalized === '📝修改欢迎语') {
       await askOnce(ctx as any, "请发送新的欢迎语（支持Markdown）", "set_welcome");
       return;
     }
-   if (normalized === '帮助' || normalized === '❓帮助') {
+    if (normalized === '帮助' || normalized === '❓帮助') {
       await safeCall(() => ctx.reply(
 `🆘 帮助
 • 私聊或在监听的频道/群内发送投稿，命中模板则标记"疑似模板"后进入审核。
