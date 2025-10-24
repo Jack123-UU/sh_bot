@@ -789,6 +789,7 @@ async function askOnce(ctx: any, tip: string, kind: PendingKind) {
 }
 
 // 把管理员的"回复本条消息"的输入解析并落库
+// 把管理员的"回复本条消息"的输入解析并落库
 async function handleAdminInput(ctx: any, adminId: number) {
   const pend = pendingInput.get(adminId);
   if (!pend) return;
@@ -844,10 +845,10 @@ async function handleAdminInput(ctx: any, adminId: number) {
         const [idxStr,text,url,orderStr] = args;
         const idx = Number(idxStr)-1; const order = Number(orderStr);
         const sorted = [...buttons].sort((a,b)=>a.order-b.order);
-       if (idx<0 || idx>=sorted.length || !isValidUrl(url) || Number.isNaN(order)) return void await safeCall(()=>ctx.reply("❌ 参数不合法或序号越界"));
+        if (idx<0 || idx>=sorted.length || !isValidUrl(url) || Number.isNaN(order)) return void await safeCall(()=>ctx.reply("❌ 参数不合法或序号越界"));
         const target = sorted[idx]; const realIndex = buttons.findIndex(b=>b===target);
         buttons[realIndex] = { text, url, order }; await store.setButtons(buttons);
-       await safeCall(()=>ctx.reply("✅ 已更新")); await showButtonsPreview(ctx);
+        await safeCall(()=>ctx.reply("✅ 已更新")); await showButtonsPreview(ctx);
         break;
       }
       case "btn_del": {
@@ -858,25 +859,25 @@ async function handleAdminInput(ctx: any, adminId: number) {
         await safeCall(()=>ctx.reply("✅ 已删除")); await showButtonsPreview(ctx);
         break;
       }
-            case "adtpl_add": {
-       if (args.length<2) return void await safeCall(()=>ctx.reply('❌ 用法："名称" "模板内容" [阈值0~1]'));
+      case "adtpl_add": {
+        if (args.length<2) return void await safeCall(()=>ctx.reply('❌ 用法："名称" "模板内容" [阈值0~1]'));
         const [name, content, thrRaw] = args;
         const thr = thrRaw!==undefined ? Number(thrRaw) : undefined;
-       if (thr!==undefined && (Number.isNaN(thr) || thr<0 || thr>1)) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
+        if (thr!==undefined && (Number.isNaN(thr) || thr<0 || thr>1)) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
         templates.push({ name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) });
         await store.setTemplates(templates);
         await safeCall(()=>ctx.reply(`✅ 已添加：${name}`, buildSubmenu("adtpl")));
         break;
       }
-            case "adtpl_set": {
+      case "adtpl_set": {
         if (args.length<3) return void await safeCall(()=>ctx.reply('❌ 用法：序号 "名称" "模板内容" [阈值0~1]'));
         const [idxStr,name,content,thrRaw] = args; const idx = Number(idxStr)-1;
-       if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void await safeCall(()=>ctx.reply("❌ 序号越界"));
+        if (Number.isNaN(idx)||idx<0||idx>=templates.length) return void await safeCall(()=>ctx.reply("❌ 序号越界"));
         let thr: number|undefined = undefined;
         if (thrRaw!==undefined) {
           thr = Number(thrRaw); if (Number.isNaN(thr)||thr<0||thr>1) return void await safeCall(()=>ctx.reply("❌ 阈值应在 0~1 之间"));
         }
-                templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
+        templates[idx] = { name, content, threshold: (Number.isFinite(Number(thr)) ? Number(thr) : (cfg.adtplDefaultThreshold ?? 0.5)) };
         await store.setTemplates(templates);
         await safeCall(()=>ctx.reply(`✅ 已更新 #${idx + 1}`, buildSubmenu("adtpl")));
         break;
@@ -918,13 +919,13 @@ async function handleAdminInput(ctx: any, adminId: number) {
       case "admins_del": {
         cfg.adminIds = cfg.adminIds.filter(x=>x!==raw);
         await store.setConfig({ adminIds: cfg.adminIds } as any);
-       await safeCall(()=>ctx.reply(`✅ 已移除管理员：${raw}`, buildSubmenu("admins")));
+        await safeCall(()=>ctx.reply(`✅ 已移除管理员：${raw}`, buildSubmenu("admins")));
         break;
       }
       case "allow_add": {
-       const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
+        const id = Number(raw); if (!id) return void await safeCall(()=>ctx.reply("❌ 需要数字ID"));
         allowlistSet.add(id); await store.addAllow(id);
-       await safeCall(()=>ctx.reply(`✅ 已加入白名单：${id}`, buildSubmenu("lists")));
+        await safeCall(()=>ctx.reply(`✅ 已加入白名单：${id}`, buildSubmenu("lists")));
         break;
       }
       case "allow_del": {
@@ -962,6 +963,9 @@ async function handleAdminInput(ctx: any, adminId: number) {
         break;
       }
     }
+  } catch (err) {
+    console.error("[handleAdminInput] Error:", err);
+    await safeCall(()=>ctx.reply("❌ 操作失败，请查看日志"));
   } finally {
     pendingInput.delete(adminId);
   }
