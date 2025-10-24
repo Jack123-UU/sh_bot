@@ -5,6 +5,7 @@ import Bottleneck from "bottleneck";
 import { Telegraf, Markup, Context } from "telegraf";
 import type { TrafficBtn, AdTemplate, Req, Config, Suspected } from "./types";
 import { buildStore, Store } from "./store";
+import { isAdminUser, ensureAdminOrAlert } from "./utils/adminAuth";
 
 /** ====== Boot ====== */
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
@@ -16,7 +17,7 @@ bot.use(async (ctx, next) => {
   const fromId = ctx.from?.id;
   const text = extractMessageText((ctx as any).message).trim();
   // 仅管理员触发；非管理员/无文本 -> 放行
-  if (!isAdmin(fromId) || !text) return next();
+  if (!(await isAdmin(fromId)) || !text) return next();
   // 只拦截：开始/设置/统计/频道管理/按钮管理/修改欢迎语/帮助 以及 /start
   const isHit = /^(开始|设置|统计|频道管理|按钮管理|修改欢迎语|帮助)$/i.test(text) || /^\/(start)$/i.test(text);
   if (!isHit) return next();
@@ -54,7 +55,7 @@ bot.use(async (ctx, next) => {
     }
     if (/^帮助$/i.test(text)) {
       await safeCall(() => ctx.reply(
-        `🆘 帮助\n• 只有命中模板的贴文才会进入审核；管理员可设置目标/审核频道、引流按钮、白/黑名单、模板等。\n• 发送“开始”可显示底部菜单；如需导航，请用精选按钮或设置面板。`
+        `🆘 帮助\n• 只有命中模板的贴文才会进入审核；管理员可设置目标/审核频道、引流按钮、白/黑名单、模板等。\n• 发送"开始"可显示底部菜单；如需导航，请用精选按钮或设置面板。`
       ));
       return;
     }
@@ -111,7 +112,7 @@ function isTooOldCtx(ctx: any, maxAgeSec: number) {
   return age > maxAgeSec;
 }
 // 来源白名单（你文件里已有 sourcesAllow: Set<string>）
-function isAllowedSource(ctx: any, sourcesAllow: Set<string>) {
+async function isAllowedSource(ctx: any, sourcesAllow: Set<string>) {
   const chat = ctx.chat || {};
   const uname = chat.username ? `@${chat.username}`.toLowerCase() : '';
   const idStr = chat.id ? String(chat.id) : '';
@@ -121,7 +122,7 @@ function isAllowedSource(ctx: any, sourcesAllow: Set<string>) {
 
 // —— 简单模板匹配 —— //
 // 用当前已保存的 templates 和 (tpl.threshold || cfg.adtplDefaultThreshold || 0.6)
-// 以“模板内容里的字段命中比例”做粗匹配（不依赖其它私有函数，避免编译找不到）
+// 以"模板内容里的字段命中比例"做粗匹配（不依赖其它私有函数，避免编译找不到）
 function textMatchesTemplates(text: string): boolean {
   if (!text) return false;
   if (!templates || templates.length === 0) return false;
@@ -135,7 +136,7 @@ function textMatchesTemplates(text: string): boolean {
 
     let hit = 0, need = 0;
     for (let p of parts) {
-      const bare = p.replace(/[:：]\s*$/, ''); // “价格：” -> “价格”
+      const bare = p.replace(/[:：]\s*$/, ''); // "价格：" -> "价格"
       if (!bare) continue;
       need++;
       if (norm.includes(bare.replace(/\s+/g, ''))) hit++;
@@ -158,7 +159,7 @@ bot.use(async (ctx, next) => {
   if (isCommandText(text)) return next();
 
   // 2) 来源白名单（如果已配置）
-  if (!isAllowedSource(ctx, sourcesAllow)) return;
+  if (!(await isAllowedSource(ctx, sourcesAllow))) return;
 
   // 3) 消息太旧 -> 忽略
   if (isTooOldCtx((ctx.message ?? (ctx as any).channelPost), MAX_MESSAGE_AGE_SEC)) return;
@@ -246,7 +247,20 @@ async function persistMetrics() {
 const dedup = new Map<string, number>();
 const userCooldown = new Map<number, number>();
 
-function isAdmin(id?: number) { return !!id && cfg.adminIds.includes(String(id)); }
+// 使用新的权限工具（支持环境变量 ADMIN_IDS/ADMIN_ID 和可选的数据库管理员）
+async function isAdmin(id?: number): Promise<boolean> {
+  if (!id) return false;
+  // 1. 检查配置中的管理员
+  if (cfg && cfg.adminIds && cfg.adminIds.includes(String(id))) return true;
+  // 2. 使用 adminAuth 工具（支持 ADMIN_IDS/ADMIN_ID 环境变量）
+  const dbAdminProvider = async () => {
+    // 未来可以从数据库读取管理员列表
+    // const dbAdmins = await store.getAdmins();
+    // return dbAdmins;
+    return [];
+  };
+  return await isAdminUser(id, dbAdminProvider);
+}
 
 /** ====== Keyboards ====== */
 const MAX_BUTTONS = 6;
@@ -402,7 +416,7 @@ async function showWelcome(ctx: Context) {
   await safeCall(() => (ctx as any).reply(cfg.welcomeText, buildReplyKeyboard()));
   const nav = buildTrafficKeyboard();
   if (nav) await safeCall(() => (ctx as any).reply("👇 精选导航", nav));
-  if (isAdmin(ctx.from?.id)) {
+  if (await isAdmin(ctx.from?.id)) {
     await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel()));
   }
 }
@@ -421,20 +435,20 @@ function buildStatsText() {
 }
 
 /** ====== Menu triggers ====== */
-bot.start(async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
-bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
+bot.start(async (ctx)=>{ await showWelcome(ctx); if (await isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
+bot.hears(/^开始$/i, async (ctx)=>{ await showWelcome(ctx); if (await isAdmin(ctx.from?.id)) { await safeCall(() => (ctx as any).reply("⚙️ 管理设置面板", buildAdminPanel())); } });
 bot.hears(/^菜单$/i, async (ctx)=>{
-  if (isAdmin(ctx.from?.id)) { await safeCall(()=>ctx.reply("⚙️ 管理设置面板", buildAdminPanel())); return; }
+  if (await isAdmin(ctx.from?.id)) { await safeCall(()=>ctx.reply("⚙️ 管理设置面板", buildAdminPanel())); return; }
   const nav = buildTrafficKeyboard();
   if (nav) return void safeCall(()=>ctx.reply("👇 菜单 / 导航", nav));
-  return void safeCall(()=>ctx.reply("暂无菜单按钮，管理员可用“引流按钮→新增”添加。"));
+  return void safeCall(()=>ctx.reply("暂无菜单按钮，管理员可用\"引流按钮→新增\"添加。"));
 });
 bot.hears(/^帮助$/i, (ctx)=> safeCall(()=>ctx.reply(
 `🆘 帮助
-• 私聊或在监听的频道/群内发送投稿，命中模板则标记“疑似模板”后进入审核。
+• 私聊或在监听的频道/群内发送投稿，命中模板则标记"疑似模板"后进入审核。
 • 管理员审核通过后，转发到目标频道。
-• 点击“菜单”可查看精选导航按钮。
-• 管理员使用“⚙️ 管理设置面板”进行全部配置。`
+• 点击"菜单"可查看精选导航按钮。
+• 管理员使用"⚙️ 管理设置面板"进行全部配置。`
 )));
 bot.hears(/^统计$/i, (ctx)=> safeCall(()=>ctx.reply(buildStatsText())));
 
@@ -460,7 +474,7 @@ async function handleIncoming(ctx: Context, msg: any, sourceChatId: number|strin
   metrics.sourceChats.add(String(sourceChatId));
 
   if (fromId && blocklistSet.has(fromId)) return;
-  if (fromId && allowlistMode && !allowlistSet.has(fromId) && !isAdmin(fromId)) {
+  if (fromId && allowlistMode && !allowlistSet.has(fromId) && !(await isAdmin(fromId))) {
     await safeCall(()=>ctx.reply("🚫 未在白名单，消息不予处理"));
     return;
   }
@@ -474,7 +488,7 @@ async function handleIncoming(ctx: Context, msg: any, sourceChatId: number|strin
 
   if (fromId) {
     const lastTs = userCooldown.get(fromId) || 0;
-    if (!isAdmin(fromId) && now - lastTs < PER_USER_COOLDOWN_MS) {
+    if (!(await isAdmin(fromId)) && now - lastTs < PER_USER_COOLDOWN_MS) {
       await safeCall(()=>ctx.reply(`⏳ 你发太快了，请 ${Math.ceil((PER_USER_COOLDOWN_MS - (now - lastTs))/1000)}s 后重试`));
       return;
     }
@@ -482,7 +496,7 @@ async function handleIncoming(ctx: Context, msg: any, sourceChatId: number|strin
   }
 
   // 管理员免审直发
-  if (fromId && isAdmin(fromId)) {
+  if (fromId && (await isAdmin(fromId))) {
     await forwardToTarget(ctx, sourceChatId, messageId, fromId, fromId, undefined);
     return;
   }
@@ -542,8 +556,8 @@ bot.on("message", async (ctx) => {
   const mid = (ctx.message as any)?.message_id;
   if (!chatId || !mid) return;
 
-  // 如果是管理员且处于“等待输入状态”，优先当作设置输入处理
-  if (fromId && isAdmin(fromId) && pendingInput.has(fromId) && (ctx.message as any).reply_to_message) {
+  // 如果是管理员且处于"等待输入状态"，优先当作设置输入处理
+  if (fromId && (await isAdmin(fromId)) && pendingInput.has(fromId) && (ctx.message as any).reply_to_message) {
     await handleAdminInput(ctx, fromId);
     return;
   }
@@ -559,17 +573,49 @@ bot.on("channel_post", async (ctx) => {
   const chatId = cp?.chat?.id;
   const mid = cp?.message_id;
   if (!chatId || !mid) return;
-  // 频道里不会有“等待输入”的场景，直接走审核流
+  // 频道里不会有"等待输入"的场景，直接走审核流
   await handleIncoming(ctx, cp, chatId, mid, undefined);
 });
 
 /** ====== Callback：面板 & 审核 ====== */
 bot.on("callback_query", async (ctx) => {
-  const cb: any = ctx.callbackQuery; const data: string = cb.data || ""; const adminId = ctx.from?.id;
+  const cb: any = ctx.callbackQuery;
+  const data: string = cb.data || "";
+  const adminId = ctx.from?.id;
+
+  // ===== 统一权限检查：所有管理面板按钮都需要验证 =====
+  const requiresAdmin = data.startsWith("panel:") || 
+                        data.startsWith("btn:") || 
+                        data.startsWith("rate:") ||
+                        data.startsWith("allowlist:") ||
+                        data.startsWith("sources:") ||
+                        data.startsWith("strict:") ||
+                        data.startsWith("adtpl:") ||
+                        data.startsWith("admins:") ||
+                        data.startsWith("allow:") ||
+                        data.startsWith("block:");
+
+  if (requiresAdmin) {
+    const ok = await ensureAdminOrAlert(
+      fetch as any,
+      TOKEN,
+      { userId: adminId, callbackQueryId: cb.id }
+    );
+    if (!ok) return;
+  }
+
+  // 审核按钮（approve/reject/ban）也需要管理员权限
+  const isModAction = data.startsWith("approve:") || 
+                      data.startsWith("reject:") || 
+                      data.startsWith("ban:");
+  
+  if (isModAction && !(await isAdmin(adminId))) {
+    await safeCall(() => ctx.answerCbQuery("无权操作", { show_alert: true }));
+    return;
+  }
 
   // —— 面板与子菜单 —— //
   if (data.startsWith("panel:")) {
-    if (!isAdmin(adminId)) { await safeCall(()=>ctx.answerCbQuery("无权操作",{show_alert:true})); return; }
     await safeCall(()=>ctx.answerCbQuery());
     const key = data.split(":")[1];
     if (key === "back") {
@@ -593,8 +639,6 @@ bot.on("callback_query", async (ctx) => {
   }
 
   // —— 子面板操作 —— //
-  if (!isAdmin(adminId)) { await safeCall(()=>ctx.answerCbQuery("无权操作",{show_alert:true})); return; }
-
   // 引流按钮
   if (data === "btn:list") {
     await safeCall(()=>ctx.answerCbQuery());
@@ -603,7 +647,7 @@ bot.on("callback_query", async (ctx) => {
   }
   if (data === "btn:add") return void askOnce(ctx, "请按格式回复：\n\"显示文字\" 空格 链接 空格 顺序\n示例：\"官网\" https://example.com 1", "btn_add");
   if (data === "btn:set") return void askOnce(ctx, "请按格式回复：\n序号 空格 \"显示文字\" 空格 链接 空格 顺序\n示例：1 \"新官网\" https://example.com 2", "btn_set");
-  if (data === "btn:del") return void askOnce(ctx, "请发送要删除的 **序号**（先点“列表”看序号）", "btn_del");
+  if (data === "btn:del") return void askOnce(ctx, "请发送要删除的 **序号**（先点\"列表\"看序号）", "btn_del");
 
   // 速率
   if (data === "rate:set") return void askOnce(ctx, "请按格式回复：\n每人冷却毫秒 全局最小间隔毫秒\n示例：3000 60", "rate_set");
@@ -652,7 +696,7 @@ bot.on("callback_query", async (ctx) => {
   if (data === "adtpl:test") return void askOnce(ctx, "请发送要测试的文本（自动计算与现有模板的相似度）", "adtpl_test");
   if (data === "adtpl:add") return void askOnce(ctx, "请按格式回复：\n\"名称\" 空格 \"模板内容\" [可选 阈值0~1]\n示例：\"卖号模板\" \"出售xxx 支持平台担保\" 0.8", "adtpl_add");
   if (data === "adtpl:set") return void askOnce(ctx, "请按格式回复：\n序号 空格 \"名称\" 空格 \"模板内容\" [可选 阈值0~1]\n示例：2 \"新模板\" \"内容...\" 0.7", "adtpl_set");
-  if (data === "adtpl:del") return void askOnce(ctx, "请发送要删除的 **序号**（先点“列表”看序号）", "adtpl_del");
+  if (data === "adtpl:del") return void askOnce(ctx, "请发送要删除的 **序号**（先点\"列表\"看序号）", "adtpl_del");
   if (data === "adtpl:thr") return void askOnce(ctx, `请发送新的 **全局阈值(0~1)**\n当前：${cfg.adtplDefaultThreshold}`, "adtpl_thr");
 
   // 管理员
@@ -713,11 +757,11 @@ async function askOnce(ctx: any, tip: string, kind: PendingKind) {
   });
 }
 
-// 把管理员的“回复本条消息”的输入解析并落库
+// 把管理员的"回复本条消息"的输入解析并落库
 async function handleAdminInput(ctx: any, adminId: number) {
   const pend = pendingInput.get(adminId);
   if (!pend) return;
-  // 必须是“回复了 force_reply 的那条”
+  // 必须是"回复了 force_reply 的那条"
   const repliedId = (ctx.message as any).reply_to_message?.message_id;
   if (!repliedId || repliedId !== pend.messageId) return;
 
@@ -778,7 +822,7 @@ async function handleAdminInput(ctx: any, adminId: number) {
       case "btn_del": {
         const idx = Number(raw)-1;
         const sorted = [...buttons].sort((a,b)=>a.order-b.order);
-        if (Number.isNaN(idx)||idx<0||idx>=sorted.length) return void ctx.reply("❌ 序号越界（先点“列表”看序号）");
+        if (Number.isNaN(idx)||idx<0||idx>=sorted.length) return void ctx.reply("❌ 序号越界（先点\"列表\"看序号）");
         const target = sorted[idx]; buttons = buttons.filter(b=>b!==target); await store.setButtons(buttons);
         await ctx.reply("✅ 已删除"); await showButtonsPreview(ctx);
         break;
@@ -925,10 +969,6 @@ async function forwardToTarget(ctx: Context, sourceChatId: number|string, messag
   await loadAll();
   // ONLY_START_CMDS: 覆盖命令菜单为仅 /start
   try { await bot.telegram.setMyCommands([{ command: "start", description: "开始" }]); } catch(e) { console.error(e); }
-  try {
-  } catch (e) { console.error("setMyCommands error", e); }
-  try {
-  } catch (e) { console.error("setMyCommands error", e); }
   const WEBHOOK_URL = process.env.WEBHOOK_URL || "";
   const PORT = Number(process.env.PORT || 3000);
 
