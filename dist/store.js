@@ -15,7 +15,7 @@ function defaultConfig(env) {
         attachButtonsToTargetMeta: (env.ATTACH_BUTTONS_TO_TARGET_META || "1") === "1",
         adminIds: (env.ADMIN_IDS || "").split(",").map(s => s.trim()).filter(Boolean),
         allowlistMode: (env.ALLOWLIST_MODE || "0") === "1",
-        adtplDefaultThreshold: Math.min(1, Math.max(0, Number(env.ADTPL_DEFAULT_THRESHOLD ?? 0.6)))
+        adtplDefaultThreshold: Math.min(1, Math.max(0, Number(env.ADTPL_DEFAULT_THRESHOLD ?? 0.6))),
     };
 }
 /* ---------------- Redis Store ---------------- */
@@ -24,9 +24,7 @@ class RedisStore {
         this.r = new ioredis_1.default(url);
         this.prefix = prefix;
     }
-    async init() {
-        // nothing
-    }
+    async init() { }
     k(key) { return `${this.prefix}:${key}`; }
     async getConfig() {
         const raw = await this.r.get(this.k("config"));
@@ -172,24 +170,27 @@ class SqliteStore {
     async addBlock(id) { this.db.prepare("INSERT OR IGNORE INTO blocklist(user_id) VALUES (?)").run(id); }
     async removeBlock(id) { this.db.prepare("DELETE FROM blocklist WHERE user_id=?").run(id); }
     async getPending(id) {
-        const r = this.db.prepare("SELECT * FROM pending WHERE id=?").get(id);
+        const r = this.db
+            .prepare("SELECT id, sourceChatId, messageId, fromId, fromName, createdAt, suspected_template, suspected_score FROM pending WHERE id=?")
+            .get(id);
         if (!r)
             return null;
         const req = {
             id: r.id,
             sourceChatId: isNaN(Number(r.sourceChatId)) ? r.sourceChatId : Number(r.sourceChatId),
-            messageId: r.messageId,
-            fromId: r.fromId,
+            messageId: Number(r.messageId),
+            fromId: Number(r.fromId),
             fromName: r.fromName,
-            createdAt: r.createdAt,
-            suspected: r.suspected_template ? { template: r.suspected_template, score: r.suspected_score } : undefined
+            createdAt: Number(r.createdAt),
+            suspected: r.suspected_template
+                ? { template: r.suspected_template, score: Number(r.suspected_score ?? 0) }
+                : undefined,
         };
         return req;
     }
     async setPending(req) {
         this.db.prepare(`INSERT OR REPLACE INTO pending(id, sourceChatId, messageId, fromId, fromName, createdAt, suspected_template, suspected_score)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-            .run(req.id, String(req.sourceChatId), req.messageId, req.fromId, req.fromName, req.createdAt, req.suspected?.template ?? null, req.suspected?.score ?? null);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.id, String(req.sourceChatId), req.messageId, req.fromId, req.fromName, req.createdAt, req.suspected?.template ?? null, req.suspected?.score ?? null);
     }
     async delPending(id) {
         this.db.prepare("DELETE FROM pending WHERE id=?").run(id);

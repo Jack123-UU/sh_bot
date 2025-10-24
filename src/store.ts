@@ -6,7 +6,7 @@ export interface Store {
   init(): Promise<void>;
   // config
   getConfig(): Promise<Config>;
-  setConfig(partial: Partial<Config>): Promise<void>;
+  setConfig(partial: Partial<Config> & Record<string, any>): Promise<void>;
   // buttons
   listButtons(): Promise<TrafficBtn[]>;
   setButtons(btns: TrafficBtn[]): Promise<void>;
