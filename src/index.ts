@@ -458,14 +458,24 @@ bot.hears(/^菜单$/i, async (ctx)=>{
   if (nav) return void safeCall(()=>ctx.reply("👇 菜单 / 导航", nav));
   return void safeCall(()=>ctx.reply("暂无菜单按钮，管理员可用\"引流按钮→新增\"添加。"));
 });
-bot.hears(/^帮助$/i, (ctx)=> safeCall(()=>ctx.reply(
+bot.hears(/^(❓\s*)?帮助$/i, async (ctx)=> {
+  await safeCall(()=>ctx.reply(
 `🆘 帮助
 • 私聊或在监听的频道/群内发送投稿，命中模板则标记"疑似模板"后进入审核。
 • 管理员审核通过后，转发到目标频道。
 • 点击"菜单"可查看精选导航按钮。
 • 管理员使用"⚙️ 管理设置面板"进行全部配置。`
-)));
-bot.hears(/^统计$/i, (ctx)=> safeCall(()=>ctx.reply(buildStatsText())));
+  ));
+  return;
+});
+bot.hears(/^(📊\s*)?统计$/i, async (ctx)=> {
+  await safeCall(()=>ctx.reply(buildStatsText()));
+  return;
+});
+
+/** ====== Moderation flow ====== */
+function isTooOld(msg: any): boolean {
+  const ts = Number(msg?.edit_date || msg?.date || 0);
 
 /** ====== Moderation flow ====== */
 function isTooOld(msg: any): boolean {
@@ -570,6 +580,14 @@ bot.on("message", async (ctx) => {
   const chatId = ctx.chat?.id;
   const mid = (ctx.message as any)?.message_id;
   if (!chatId || !mid) return;
+
+  
+  // 检查是否是底部按钮命令，如果是则不进入审核流程
+  const text = extractMessageText(ctx.message);
+  const normalized = text.replace(/\s+/g, '').toLowerCase();
+  const buttonCmds = ['帮助', '❓帮助', '菜单', '开始', '设置', '⚙️设置', '统计', '📊统计', '频道管理', '📣频道管理', '按钮管理', '🔘按钮管理', '修改欢迎语', '📝修改欢迎语'];
+  const isButtonCmd = buttonCmds.some(cmd => normalized === cmd.replace(/\s+/g, '').toLowerCase());
+  if (isButtonCmd) return;
 
   // 如果是管理员且处于"等待输入状态"，优先当作设置输入处理
   if (fromId && (await isAdmin(fromId)) && pendingInput.has(fromId) && (ctx.message as any).reply_to_message) {
