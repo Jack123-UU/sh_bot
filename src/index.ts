@@ -473,9 +473,7 @@ bot.hears(/^(📊\s*)?统计$/i, async (ctx)=> {
   return;
 });
 
-/** ====== Moderation flow ====== */
-function isTooOld(msg: any): boolean {
-  const ts = Number(msg?.edit_date || msg?.date || 0);
+
 
 /** ====== Moderation flow ====== */
 function isTooOld(msg: any): boolean {
