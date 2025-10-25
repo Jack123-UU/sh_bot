@@ -1,8 +1,0 @@
-﻿# Render Deployment Package
-
-Created: 2025-10-18 02:01:54
-Version: 1.0.0
-
-This package contains all files needed for Render deployment.
-
-Please read RENDER_DEPLOYMENT_GUIDE.md for deployment instructions.
