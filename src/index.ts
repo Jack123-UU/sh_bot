@@ -170,8 +170,6 @@ bot.use(async (ctx, next) => {
  
 
   const text = getMessageText(ctx);
-  // ... 其余代码不变
-});
 
   // 1) 命令 -> 交给命令处理器，不拦截
   if (isCommandText(text)) return next();
