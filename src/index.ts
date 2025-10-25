@@ -266,6 +266,7 @@ function buildAdminPanel() {
     [Markup.button.callback("🧱 来源白名单", "panel:sources"), Markup.button.callback("📐 严格模板", "panel:strict")],
     [Markup.button.callback("🧩 广告模板", "panel:adtpl"), Markup.button.callback("👑 管理员", "panel:admins")],
     [Markup.button.callback("🚷 白/黑名单", "panel:lists"), Markup.button.callback("📊 查看统计", "panel:stats")],
+    [Markup.button.callback("📋 查看配置", "panel:view_config")],  // ← 新增一行
   ]);
 }
 function buildSubmenu(key: string) {
@@ -649,8 +650,24 @@ bot.on("callback_query", async (ctx) => {
     if (key === "lists") return void ctx.editMessageText("🚷 白/黑名单", buildSubmenu("lists"));
     if (key === "buttons") return void ctx.editMessageText(`🧲 引流按钮（上限 ${MAX_BUTTONS} 个）`, buildSubmenu("buttons"));
     if (key === "stats") return void ctx.editMessageText("📊 统计\n\n" + buildStatsText(), buildAdminPanel());
-    return;
-  }
+    // ← 在这里添加新代码
+if (key === "view_config") {
+  const configText = `📋 当前配置
+
+🎯 目标频道：${cfg.forwardTargetId || "未设置"}
+🔍 审核频道：${cfg.reviewTargetId || "(逐个发管理员)"}
+👋 欢迎语：${cfg.welcomeText ? "已设置" : "未设置"}
+🧩 广告模板：${templates.length} 个
+🔘 引流按钮：${buttons.length} 个
+👑 管理员：${cfg.adminIds.length} 个
+🧱 来源白名单：${sourcesAllow.size} 个
+📐 严格模板：${cfg.strictTemplate ? "✅ 开启" : "❌ 关闭"}
+🧾 白名单模式：${cfg.allowlistMode ? "✅ 开启" : "❌ 关闭"}
+⚙️ 全局阈值：${cfg.adtplDefaultThreshold}`;
+  
+  return void ctx.editMessageText(configText, buildAdminPanel());
+}
+return;  
 
   // —— 子面板操作 —— //
   // 引流按钮
