@@ -364,7 +364,19 @@ function detectAdTemplate(text: string): { matched: boolean; name?: string; scor
   return { matched:false };
 }
 function extractMessageText(msg: any): string {
-  return (msg?.text ?? msg?.caption ?? "").toString();
+  // 1. 纯文字消息
+  if (msg?.text) return msg.text;
+  
+  // 2. 图片/视频/文件的 caption
+  if (msg?.caption) return msg.caption;
+  
+  // 3. 如果有媒体但没有 caption，返回媒体类型标记
+  if (msg?.photo) return "[图片]";
+  if (msg?.video) return "[视频]";
+  if (msg?.document) return "[文件]";
+  if (msg?.animation) return "[动图]";
+  
+  return "";
 }
 
 /** ====== State for admin input (force-reply) ====== */
