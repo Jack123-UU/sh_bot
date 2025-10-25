@@ -167,11 +167,7 @@ bot.use(async (ctx, next) => {
     return next();
   }
 
-  // ✅ 新增：如果是回复消息，直接放行
-  const msg = (upd.message || upd.edited_message) as any;
-  if (msg?.reply_to_message) {
-    return next();
-  }
+ 
 
   const text = getMessageText(ctx);
   // ... 其余代码不变
