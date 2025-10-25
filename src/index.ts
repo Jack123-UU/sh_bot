@@ -160,9 +160,22 @@ function textMatchesTemplates(text: string): boolean {
 bot.use(async (ctx, next) => {
   const upd: any = ctx.update;
   const isMsg = !!(upd.message || upd.channel_post || upd.edited_message || upd.edited_channel_post);
-  if (!isMsg) return next(); // 不是消息（例如回调），放过
+  if (!isMsg) return next();
+    // 如果是回复消息（管理员输入），直接放行
+  const msg = (upd.message || upd.edited_message) as any;
+  if (msg?.reply_to_message) {
+    return next();
+  }
+
+  // ✅ 新增：如果是回复消息，直接放行
+  const msg = (upd.message || upd.edited_message) as any;
+  if (msg?.reply_to_message) {
+    return next();
+  }
 
   const text = getMessageText(ctx);
+  // ... 其余代码不变
+});
 
   // 1) 命令 -> 交给命令处理器，不拦截
   if (isCommandText(text)) return next();
@@ -804,7 +817,7 @@ async function handleAdminInput(ctx: any, adminId: number) {
   pendingInput.delete(adminId);
 
   const raw: string = String((ctx.message as any).text || "").trim();
-  const args = raw.match(/\"([^\"]+)\"|'([^']+)'|(\S+)/g)?.map((s: string)=>s.replace(/^['\"]|['\"]$/g,"")) || [];
+  const args = raw.match(/["""]([^"""]+)["""]/g)?.map((s: string)=>s.replace(/^["""'']|["""'']$/g,"")) || raw.match(/\"([^\"]+)\"|'([^']+)'|(\S+)/g)?.map((s: string)=>s.replace(/^['\"]|['\"]$/g,"")) || [];
   try {
     switch (pend.kind) {
       case "set_target": {
