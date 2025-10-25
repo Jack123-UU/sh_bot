@@ -667,9 +667,15 @@ if (key === "view_config") {
   
   return void ctx.editMessageText(configText, buildAdminPanel());
 }
-return;  
+return;
+}  // ← 添加这个结束括号
 
-  // —— 子面板操作 —— //
+// —— 子面板操作 —— //
+if (data === "btn:list") {
+  await safeCall(()=>ctx.answerCbQuery());
+  await showButtonsPreview(ctx);
+  return;
+}
   // 引流按钮
   if (data === "btn:list") {
     await safeCall(()=>ctx.answerCbQuery());
